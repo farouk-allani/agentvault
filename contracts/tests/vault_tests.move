@@ -346,12 +346,14 @@ module agentvault::vault_tests {
     #[expected_failure(abort_code = vault::EBelowMinBalance)]
     fun test_payment_below_min_balance() {
         let mut scenario = setup_test();
-        
-        // Test constants: 1000 USDC balance, 1 USDC min_balance
+
+        // Test constants: 1000 USDC balance, 100 USDC min_balance
         // Payment that would leave balance below min_balance should fail
         let min_balance: u64 = 100_000_000; // 100 USDC min balance
+        let high_per_tx_limit: u64 = 1_000_000_000; // 1000 USDC - high enough to test min_balance
+        let high_daily_limit: u64 = 1_000_000_000; // 1000 USDC
 
-        // Create vault with high min_balance
+        // Create vault with high min_balance and high tx limits to specifically test min_balance
         ts::next_tx(&mut scenario, OWNER);
         {
             let coin = create_test_coin(&mut scenario, INITIAL_BALANCE); // 1000 USDC
@@ -360,8 +362,8 @@ module agentvault::vault_tests {
             vault::create_vault<SUI>(
                 coin,
                 AGENT,
-                DAILY_LIMIT,
-                PER_TX_LIMIT,
+                high_daily_limit,
+                high_per_tx_limit,
                 ALERT_THRESHOLD,
                 true,
                 min_balance, // 100 USDC min balance

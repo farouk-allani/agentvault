@@ -6,6 +6,10 @@ module agentvault::vault {
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
 
+    // DeepBook imports for DEX integration
+    use deepbook::clob_v2::{Self, Pool};
+    use deepbook::custodian_v2::AccountCap;
+
     use agentvault::events;
 
     // === Constants ===
@@ -153,10 +157,90 @@ module agentvault::vault {
         
         // Yield routing: if yield_enabled is true, a portion could be routed to yield
         // TODO: In production, implement yield provider integration here
-        // For now, we emit an event if yield is enabled for tracking purposes
-        if (vault.constraints.yield_enabled && vault.yield_position_id.is_some()) {
-            // Future: route a percentage to yield provider
-            // Currently tracked via yield_position_id and yield_earned fields
+        // For now, we just track via yield_position_id and yield_earned fields
+    }
+
+    /// Execute a swap on DeepBook within vault constraints
+    /// This is the KEY function that makes this project unique
+    public entry fun execute_swap<BaseAsset, QuoteAsset>(
+        vault: &mut Vault<QuoteAsset>,
+        pool: &mut Pool<BaseAsset, QuoteAsset>,
+        account_cap: &AccountCap,
+        client_order_id: u64,
+        quantity: u64,
+        is_bid: bool,  // true = buy base asset, false = sell base asset
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let sender = tx_context::sender(ctx);
+        let current_time = clock::timestamp_ms(clock);
+
+        // === EXISTING CONSTRAINT CHECKS (reuse your logic) ===
+        assert!(sender == vault.agent, ENotAgent);
+        assert!(!vault.constraints.paused, EVaultPaused);
+        assert!(quantity > 0, EZeroAmount);
+        assert!(quantity <= vault.constraints.per_tx_limit, EExceedsPerTxLimit);
+
+        // Reset daily counter if needed
+        maybe_reset_daily(vault, current_time);
+
+        assert!(vault.spent_today + quantity <= vault.constraints.daily_limit, EExceedsDailyLimit);
+        assert!(balance::value(&vault.balance) >= quantity, EInsufficientBalance);
+
+        // Enforce minimum balance
+        let remaining_after = balance::value(&vault.balance) - quantity;
+        assert!(remaining_after >= vault.constraints.min_balance, EBelowMinBalance);
+
+        // === NEW: Execute swap on DeepBook ===
+        let payment_coin = coin::take(&mut vault.balance, quantity, ctx);
+
+        // Place market order on DeepBook
+        // Note: DeepBook v2 swap functions are deprecated, consider upgrading to DeepBook v3
+        let (base_coin, quote_coin, _) = clob_v2::swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
+            pool,
+            client_order_id,
+            account_cap,
+            quantity,
+            clock,
+            payment_coin,
+            ctx
+        );
+
+        // Handle received coins (deposit back or transfer)
+        // For simplicity, transfer base asset to vault owner
+        transfer::public_transfer(base_coin, vault.owner);
+
+        // Return any remaining quote coin to vault
+        if (coin::value(&quote_coin) > 0) {
+            balance::join(&mut vault.balance, coin::into_balance(quote_coin));
+        } else {
+            coin::destroy_zero(quote_coin);
+        };
+
+        // === UPDATE TRACKING ===
+        vault.spent_today = vault.spent_today + quantity;
+        vault.total_spent = vault.total_spent + quantity;
+        vault.tx_count = vault.tx_count + 1;
+
+        // Emit event
+        events::emit_swap_executed(
+            object::id(vault),
+            sender,
+            quantity,
+            is_bid,
+            vault.spent_today,
+            vault.constraints.daily_limit - vault.spent_today,
+            current_time,
+        );
+
+        // Alert check
+        if (vault.spent_today >= vault.constraints.alert_threshold) {
+            events::emit_alert_triggered(
+                object::id(vault),
+                vault.owner,
+                vault.spent_today,
+                vault.constraints.alert_threshold,
+            );
         }
     }
 

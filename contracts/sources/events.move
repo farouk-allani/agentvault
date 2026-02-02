@@ -59,6 +59,16 @@ module agentvault::events {
         new_balance: u64,
     }
 
+    public struct SwapExecuted has copy, drop {
+        vault_id: ID,
+        agent: address,
+        amount: u64,
+        is_bid: bool,
+        spent_today: u64,
+        remaining_daily: u64,
+        timestamp: u64,
+    }
+
     // === Emit Functions ===
 
     public fun emit_vault_created(
@@ -131,5 +141,19 @@ module agentvault::events {
         new_balance: u64,
     ) {
         event::emit(FundsWithdrawn { vault_id, owner, amount, new_balance });
+    }
+
+    public fun emit_swap_executed(
+        vault_id: ID,
+        agent: address,
+        amount: u64,
+        is_bid: bool,
+        spent_today: u64,
+        remaining_daily: u64,
+        timestamp: u64,
+    ) {
+        event::emit(SwapExecuted {
+            vault_id, agent, amount, is_bid, spent_today, remaining_daily, timestamp,
+        });
     }
 }

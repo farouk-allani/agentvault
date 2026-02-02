@@ -5,9 +5,11 @@ edition = "2024"         # edition = "legacy" to use legacy (pre-2024) Move
 # authors = ["Farouk Allani"]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
 [dependencies]
+DeepBook = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/deepbook", rev = "framework/mainnet" }
 
 # Read more about the package management system options:
 # https://docs.sui.io/guides/developer/sui-101/move-package-management
 
 [addresses]
 agentvault = "0x0"
+deepbook = "0xdee9"
