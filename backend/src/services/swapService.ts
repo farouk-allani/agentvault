@@ -76,6 +76,9 @@ export class SwapService {
   ): Transaction {
     const tx = new Transaction();
 
+    // Set an explicit gas budget to avoid dry-run failures during build
+    tx.setGasBudget(200_000_000);
+
     // DeepBook v3 execute_swap signature:
     // execute_swap<BaseAsset, QuoteAsset>(
     //   vault: &mut Vault<QuoteAsset>,
@@ -211,13 +214,15 @@ export class SwapService {
    * Get available DeepBook pools
    */
   getAvailablePools(): Record<string, string> {
-    return { ...DEEPBOOK_POOLS };
+    const entries = Object.entries(DEEPBOOK_POOLS).filter(([, id]) => id && id !== '0x0');
+    return Object.fromEntries(entries);
   }
 
   /**
    * Validate if a pool ID exists in our configured pools
    */
   isValidPool(poolId: string): boolean {
+    if (!poolId || poolId === '0x0') return false;
     return Object.values(DEEPBOOK_POOLS).includes(poolId);
   }
 

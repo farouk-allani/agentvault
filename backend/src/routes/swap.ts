@@ -73,6 +73,15 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (request.deepCoinId === '0x0' || request.deepCoinId.trim() === '') {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid DEEP coin ID',
+        errorCode: 'MISSING_DEEP_COIN',
+      });
+      return;
+    }
+
     // Pre-validate constraints (agent will also validate on-chain)
     const quantity = BigInt(request.quantity);
     const perTxLimit = BigInt(vault.constraints.perTxLimit);
@@ -123,6 +132,7 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
       request.baseAssetType,
       request.quoteAssetType
     );
+    tx.setSender(request.agentAddress);
 
     // Serialize transaction for client-side signing
     const txBytes = await tx.build({ client: suiClient.getClient() });
@@ -195,6 +205,15 @@ router.post('/execute', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (request.deepCoinId === '0x0' || request.deepCoinId.trim() === '') {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid DEEP coin ID',
+        errorCode: 'MISSING_DEEP_COIN',
+      });
+      return;
+    }
+
     // Build transaction for client-side signing
     // Note: For security, we don't accept private keys over the network
     // The agent must sign the transaction client-side
@@ -203,6 +222,7 @@ router.post('/execute', async (req: Request, res: Response): Promise<void> => {
       request.baseAssetType,
       request.quoteAssetType
     );
+    tx.setSender(request.agentAddress);
     const txBytes = await tx.build({ client: suiClient.getClient() });
 
     res.json({

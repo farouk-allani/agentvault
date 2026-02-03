@@ -1,9 +1,100 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import { Transaction } from '@mysten/sui/transactions';
 import { suiClient } from '../services/suiClient.js';
 import { parseIntent, validateIntent, formatIntent } from '../services/intentParser.js';
+import { env } from '../config/index.js';
 
 const router = Router();
+
+// ============================================================================
+// CREATE VAULT
+// ============================================================================
+
+const createVaultSchema = z.object({
+  owner: z.string().min(1, 'Owner address is required'),
+  agent: z.string().min(1, 'Agent address is required'),
+  dailyLimit: z.number().min(1_000_000).max(1_000_000_000_000),
+  perTxLimit: z.number().min(1).max(1_000_000_000_000),
+  alertThreshold: z.number().min(0),
+  yieldEnabled: z.boolean(),
+  minBalance: z.number().min(0),
+  coinObjectId: z.string().min(1, 'Coin object ID is required'),
+  assetType: z.string().optional(),
+});
+
+/**
+ * POST /api/vault/create
+ * Build a transaction to create a new vault
+ */
+router.post('/create', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const params = createVaultSchema.parse(req.body);
+
+    // Validate per-tx limit doesn't exceed daily limit
+    if (params.perTxLimit > params.dailyLimit) {
+      res.status(400).json({
+        success: false,
+        error: 'Per-transaction limit cannot exceed daily limit',
+      });
+      return;
+    }
+
+    const assetType = params.assetType || env.USDC_TYPE || '0x2::sui::SUI';
+
+    const tx = new Transaction();
+    tx.setGasBudget(100_000_000);
+
+    tx.moveCall({
+      target: `${env.PACKAGE_ID}::vault::create_vault`,
+      typeArguments: [assetType],
+      arguments: [
+        tx.object(params.coinObjectId),     // initial_deposit: Coin<T>
+        tx.pure.address(params.agent),       // agent: address
+        tx.pure.u64(BigInt(params.dailyLimit)),    // daily_limit: u64
+        tx.pure.u64(BigInt(params.perTxLimit)),    // per_tx_limit: u64
+        tx.pure.u64(BigInt(params.alertThreshold)), // alert_threshold: u64
+        tx.pure.bool(params.yieldEnabled),   // yield_enabled: bool
+        tx.pure.u64(BigInt(params.minBalance)),    // min_balance: u64
+        tx.object('0x6'),                    // clock: &Clock
+      ],
+    });
+
+    tx.setSender(params.owner);
+    const txBytes = await tx.build({ client: suiClient.getClient() });
+
+    res.json({
+      success: true,
+      transaction: Buffer.from(txBytes).toString('base64'),
+      message: 'Vault creation transaction built. Sign and submit to create vault.',
+      params: {
+        owner: params.owner,
+        agent: params.agent,
+        dailyLimit: params.dailyLimit,
+        perTxLimit: params.perTxLimit,
+        alertThreshold: params.alertThreshold,
+        yieldEnabled: params.yieldEnabled,
+        minBalance: params.minBalance,
+        assetType,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid request parameters',
+        details: error.errors,
+      });
+      return;
+    }
+    console.error('Error building create vault transaction:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error building transaction',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
 
 /**
  * GET /api/vault/:id

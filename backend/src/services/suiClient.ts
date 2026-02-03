@@ -11,6 +11,26 @@ function extractOptionValue(optionField: unknown): string | null {
   return null;
 }
 
+function extractBalanceValue(balanceField: unknown): string {
+  if (balanceField && typeof balanceField === 'object') {
+    const record = balanceField as Record<string, unknown>;
+    const value = record.value;
+    if (typeof value === 'string') return value;
+  }
+  if (typeof balanceField === 'string') return balanceField;
+  return '0';
+}
+
+function extractConstraints(constraintsField: unknown): Record<string, unknown> {
+  if (constraintsField && typeof constraintsField === 'object') {
+    const record = constraintsField as Record<string, unknown>;
+    if (record.fields && typeof record.fields === 'object') {
+      return record.fields as Record<string, unknown>;
+    }
+  }
+  return (constraintsField as Record<string, unknown>) || {};
+}
+
 export interface VaultData {
   id: string;
   owner: string;
@@ -58,13 +78,13 @@ class SuiClientService {
       }
 
       const fields = response.data.content.fields as Record<string, unknown>;
-      const constraints = fields.constraints as Record<string, unknown>;
+      const constraints = extractConstraints(fields.constraints);
 
       return {
         id: vaultId,
         owner: fields.owner as string,
         agent: fields.agent as string,
-        balance: (fields.balance as Record<string, string>).value || '0',
+        balance: extractBalanceValue(fields.balance),
         constraints: {
           dailyLimit: constraints.daily_limit as string,
           perTxLimit: constraints.per_tx_limit as string,
@@ -103,13 +123,13 @@ class SuiClientService {
       for (const obj of response.data) {
         if (obj.data?.content && obj.data.content.dataType === 'moveObject') {
           const fields = obj.data.content.fields as Record<string, unknown>;
-          const constraints = fields.constraints as Record<string, unknown>;
+          const constraints = extractConstraints(fields.constraints);
 
           vaults.push({
             id: obj.data.objectId,
             owner: fields.owner as string,
             agent: fields.agent as string,
-            balance: (fields.balance as Record<string, string>).value || '0',
+            balance: extractBalanceValue(fields.balance),
             constraints: {
               dailyLimit: constraints.daily_limit as string,
               perTxLimit: constraints.per_tx_limit as string,
