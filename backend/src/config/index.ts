@@ -7,7 +7,9 @@ export const env = {
   SUI_RPC_URL: process.env.SUI_RPC_URL,
   PACKAGE_ID: process.env.PACKAGE_ID || '',
   USDC_TYPE: process.env.USDC_TYPE || '0x2::sui::SUI', // Default to SUI for testing
+  DEEP_TYPE: process.env.DEEP_TYPE || '',
   DEEPBOOK_SUI_USDC_POOL: process.env.DEEPBOOK_SUI_USDC_POOL || '',
+  DEEPBOOK_DEEP_SUI_POOL: process.env.DEEPBOOK_DEEP_SUI_POOL || '',
   PORT: parseInt(process.env.PORT || '3001', 10),
 };
 

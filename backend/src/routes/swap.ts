@@ -10,10 +10,10 @@ const swapRequestSchema = z.object({
   vaultId: z.string().min(1, 'Vault ID is required'),
   poolId: z.string().min(1, 'Pool ID is required'),
   quantity: z.string().min(1, 'Quantity is required'),
+  minOut: z.string().min(1, 'Minimum output is required'),
   isBid: z.boolean(),
   agentAddress: z.string().min(1, 'Agent address is required'),
-  clientOrderId: z.string().optional(),
-  accountCapId: z.string().optional(),
+  deepCoinId: z.string().min(1, 'DEEP coin ID is required'),
   baseAssetType: z.string().optional(),
   quoteAssetType: z.string().optional(),
 });
@@ -59,6 +59,16 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
         success: false,
         error: 'Vault is paused',
         errorCode: 'VAULT_PAUSED',
+      });
+      return;
+    }
+
+    // Validate pool ID against configured DeepBook v3 pools
+    if (!swapService.isValidPool(request.poolId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid or unsupported pool ID',
+        errorCode: 'INVALID_POOL',
       });
       return;
     }
@@ -171,6 +181,16 @@ router.post('/execute', async (req: Request, res: Response): Promise<void> => {
         success: false,
         error: 'Not authorized agent',
         errorCode: 'NOT_AGENT',
+      });
+      return;
+    }
+
+    // Validate pool ID against configured DeepBook v3 pools
+    if (!swapService.isValidPool(request.poolId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid or unsupported pool ID',
+        errorCode: 'INVALID_POOL',
       });
       return;
     }
