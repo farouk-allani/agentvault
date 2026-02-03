@@ -6,9 +6,10 @@ module agentvault::vault {
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
 
-    // DeepBook imports for DEX integration
-    use deepbook::clob_v2::{Self, Pool};
-    use deepbook::custodian_v2::AccountCap;
+    // DeepBook v3 imports for DEX integration
+    use deepbook::pool::{Self, Pool};
+    // DEEP token type for paying fees
+    use token::deep::DEEP;
 
     use agentvault::events;
 
@@ -160,22 +161,25 @@ module agentvault::vault {
         // For now, we just track via yield_position_id and yield_earned fields
     }
 
-    /// Execute a swap on DeepBook within vault constraints
+    /// Execute a swap on DeepBook v3 within vault constraints
     /// This is the KEY function that makes this project unique
+    ///
+    /// DeepBook v3 requires DEEP tokens for trading fees. The caller must provide
+    /// sufficient DEEP tokens via `deep_in`. Any unused DEEP is returned to the vault owner.
     public entry fun execute_swap<BaseAsset, QuoteAsset>(
         vault: &mut Vault<QuoteAsset>,
         pool: &mut Pool<BaseAsset, QuoteAsset>,
-        account_cap: &AccountCap,
-        client_order_id: u64,
         quantity: u64,
-        is_bid: bool,  // true = buy base asset, false = sell base asset
+        min_base_out: u64,  // Minimum base asset to receive (slippage protection)
+        deep_in: Coin<DEEP>,  // DEEP tokens for paying trading fees
+        is_bid: bool,  // true = buy base asset (swap quote for base), false = sell base asset
         clock: &Clock,
         ctx: &mut TxContext
     ) {
         let sender = tx_context::sender(ctx);
         let current_time = clock::timestamp_ms(clock);
 
-        // === EXISTING CONSTRAINT CHECKS (reuse your logic) ===
+        // === CONSTRAINT CHECKS ===
         assert!(sender == vault.agent, ENotAgent);
         assert!(!vault.constraints.paused, EVaultPaused);
         assert!(quantity > 0, EZeroAmount);
@@ -191,23 +195,24 @@ module agentvault::vault {
         let remaining_after = balance::value(&vault.balance) - quantity;
         assert!(remaining_after >= vault.constraints.min_balance, EBelowMinBalance);
 
-        // === NEW: Execute swap on DeepBook ===
+        // === Execute swap on DeepBook v3 ===
         let payment_coin = coin::take(&mut vault.balance, quantity, ctx);
 
-        // Place market order on DeepBook
-        // Note: DeepBook v2 swap functions are deprecated, consider upgrading to DeepBook v3
-        let (base_coin, quote_coin, _) = clob_v2::swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
+        // DeepBook v3: swap_exact_quote_for_base
+        // Returns (Coin<BaseAsset>, Coin<QuoteAsset>, Coin<DEEP>)
+        // - base_coin: The base asset received from the swap
+        // - quote_coin: Any remaining quote asset (if not fully filled)
+        // - deep_coin: Remaining DEEP after fees
+        let (base_coin, quote_coin, deep_coin) = pool::swap_exact_quote_for_base<BaseAsset, QuoteAsset>(
             pool,
-            client_order_id,
-            account_cap,
-            quantity,
-            clock,
             payment_coin,
+            deep_in,
+            min_base_out,
+            clock,
             ctx
         );
 
-        // Handle received coins (deposit back or transfer)
-        // For simplicity, transfer base asset to vault owner
+        // Transfer received base asset to vault owner
         transfer::public_transfer(base_coin, vault.owner);
 
         // Return any remaining quote coin to vault
@@ -215,6 +220,13 @@ module agentvault::vault {
             balance::join(&mut vault.balance, coin::into_balance(quote_coin));
         } else {
             coin::destroy_zero(quote_coin);
+        };
+
+        // Return remaining DEEP to vault owner (unused fee tokens)
+        if (coin::value(&deep_coin) > 0) {
+            transfer::public_transfer(deep_coin, vault.owner);
+        } else {
+            coin::destroy_zero(deep_coin);
         };
 
         // === UPDATE TRACKING ===
