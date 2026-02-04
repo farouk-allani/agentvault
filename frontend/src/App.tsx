@@ -80,6 +80,25 @@ interface SwapBuildResult {
   };
 }
 
+interface PoolInfo {
+  pair: string;
+  id: string;
+  baseAsset: string;
+  quoteAsset: string;
+  baseName: string;
+  quoteName: string;
+}
+
+interface QuoteResult {
+  inputAmount: string;
+  estimatedOutput: string;
+  midPrice: string;
+  priceImpact: string;
+  estimatedFee: string;
+  direction: 'buy' | 'sell';
+  pool: { baseName: string; quoteName: string } | null;
+}
+
 type TabType = 'dashboard' | 'swap' | 'create' | 'manage';
 
 // ============================================================================
@@ -177,6 +196,8 @@ export default function App() {
   });
   const [swapBuild, setSwapBuild] = useState<SwapBuildResult | null>(null);
   const [lastTxDigest, setLastTxDigest] = useState<string | null>(null);
+  const [availablePools, setAvailablePools] = useState<PoolInfo[]>([]);
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
 
   // Intent / Create state
   const [intent, setIntent] = useState('Spend up to $100 per day, max $25 per trade, keep $10 minimum');
@@ -186,6 +207,10 @@ export default function App() {
     initialDeposit: '',
     coinObjectId: '',
   });
+
+  // Deposit/Withdraw state
+  const [depositForm, setDepositForm] = useState({ coinObjectId: '' });
+  const [withdrawForm, setWithdrawForm] = useState({ amount: '' });
 
   // Transaction history
   const [txHistory, setTxHistory] = useState<Array<{ digest: string; type: string; amount: string; timestamp: number }>>([]);
@@ -255,6 +280,37 @@ export default function App() {
       }
     });
   }, [account?.address, withLoading]);
+
+  const loadAvailablePools = useCallback(async () => {
+    const result = await fetchJson<{ pools: PoolInfo[] }>(`${API_BASE}/api/swap/pools`);
+    if (result.ok && result.data) {
+      setAvailablePools(result.data.pools);
+      // Auto-select first pool if none selected
+      if (result.data.pools.length > 0 && !swapForm.poolId) {
+        setSwapForm((f) => ({ ...f, poolId: result.data!.pools[0].id }));
+      }
+    }
+  }, [swapForm.poolId]);
+
+  const fetchQuote = useCallback(async () => {
+    if (!swapForm.poolId || !swapForm.amount) {
+      setQuote(null);
+      return;
+    }
+    const result = await fetchJson<{ quote: QuoteResult }>(
+      `${API_BASE}/api/swap/quote?poolId=${swapForm.poolId}&quantity=${parseAmount(swapForm.amount)}&isBid=${swapForm.direction === 'buy'}`
+    );
+    if (result.ok && result.data) {
+      setQuote(result.data.quote);
+      // Auto-set minOut with 2% slippage
+      if (result.data.quote.estimatedOutput) {
+        const minOut = Math.floor(parseInt(result.data.quote.estimatedOutput) * 0.98);
+        setSwapForm((f) => ({ ...f, minOut: formatAmount(minOut.toString()) }));
+      }
+    } else {
+      setQuote(null);
+    }
+  }, [swapForm.poolId, swapForm.amount, swapForm.direction]);
 
   const parseIntent = useCallback(async () => {
     await withLoading('intent', async () => {
@@ -399,6 +455,84 @@ export default function App() {
     }
   }, [intentResult, account?.address, createForm, signAndExecute, notify, loadUserVaults]);
 
+  const executeDeposit = useCallback(async () => {
+    if (!vaultId || !account?.address || !depositForm.coinObjectId) {
+      notify('Enter coin object ID to deposit', 'error');
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434'}::vault::deposit`,
+        typeArguments: ['0x2::sui::SUI'], // Default to SUI, can be made dynamic
+        arguments: [
+          tx.object(vaultId),
+          tx.object(depositForm.coinObjectId),
+        ],
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (txResult) => {
+            notify(`Deposit successful! TX: ${txResult.digest.slice(0, 16)}...`, 'success');
+            setTxHistory((prev) => [
+              { digest: txResult.digest, type: 'deposit', amount: 'N/A', timestamp: Date.now() },
+              ...prev.slice(0, 9),
+            ]);
+            setDepositForm({ coinObjectId: '' });
+            setTimeout(loadVaultStatus, 2000);
+          },
+          onError: (error) => {
+            notify(`Deposit failed: ${error.message}`, 'error');
+          },
+        }
+      );
+    } catch (error) {
+      notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
+    }
+  }, [vaultId, account?.address, depositForm, signAndExecute, notify, loadVaultStatus]);
+
+  const executeWithdraw = useCallback(async () => {
+    if (!vaultId || !account?.address || !withdrawForm.amount) {
+      notify('Enter amount to withdraw', 'error');
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434'}::vault::withdraw`,
+        typeArguments: ['0x2::sui::SUI'], // Default to SUI, can be made dynamic
+        arguments: [
+          tx.object(vaultId),
+          tx.pure.u64(BigInt(parseAmount(withdrawForm.amount))),
+        ],
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (txResult) => {
+            notify(`Withdrawal successful! TX: ${txResult.digest.slice(0, 16)}...`, 'success');
+            setTxHistory((prev) => [
+              { digest: txResult.digest, type: 'withdraw', amount: withdrawForm.amount, timestamp: Date.now() },
+              ...prev.slice(0, 9),
+            ]);
+            setWithdrawForm({ amount: '' });
+            setTimeout(loadVaultStatus, 2000);
+          },
+          onError: (error) => {
+            notify(`Withdrawal failed: ${error.message}`, 'error');
+          },
+        }
+      );
+    } catch (error) {
+      notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
+    }
+  }, [vaultId, account?.address, withdrawForm, signAndExecute, notify, loadVaultStatus]);
+
   // ============================================================================
   // EFFECTS
   // ============================================================================
@@ -421,6 +555,21 @@ export default function App() {
     const interval = setInterval(loadVaultStatus, 15000);
     return () => clearInterval(interval);
   }, [vaultId, loadVaultStatus]);
+
+  // Load available pools on mount
+  useEffect(() => {
+    loadAvailablePools();
+  }, [loadAvailablePools]);
+
+  // Debounced quote fetch when swap inputs change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (swapForm.amount && swapForm.poolId) {
+        fetchQuote();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [swapForm.amount, swapForm.poolId, swapForm.direction, fetchQuote]);
 
   // ============================================================================
   // COMPUTED VALUES
@@ -700,13 +849,32 @@ export default function App() {
                   </label>
 
                   <label className="field">
-                    DeepBook Pool ID
-                    <input
+                    DeepBook Pool
+                    <select
                       value={swapForm.poolId}
                       onChange={(e) => setSwapForm((f) => ({ ...f, poolId: e.target.value }))}
-                      placeholder="0x..."
-                    />
+                      className="select-input"
+                    >
+                      <option value="">Select a pool...</option>
+                      {availablePools.map((pool) => (
+                        <option key={pool.id} value={pool.id}>
+                          {pool.baseName}/{pool.quoteName} ({pool.pair})
+                        </option>
+                      ))}
+                    </select>
                   </label>
+
+                  {quote && (
+                    <div className="quote-display">
+                      <div className="quote-header">Estimated Output</div>
+                      <div className="quote-value">{formatAmount(quote.estimatedOutput)} {quote.pool?.baseName}</div>
+                      <div className="quote-details">
+                        <span>Price: {parseFloat(quote.midPrice).toFixed(6)}</span>
+                        <span>Impact: {quote.priceImpact}</span>
+                        <span>Fee: ~{formatAmount(quote.estimatedFee)}</span>
+                      </div>
+                    </div>
+                  )}
 
                   <label className="field">
                     DEEP Coin ID (for fees)
@@ -932,12 +1100,73 @@ export default function App() {
               <div className="card-head">
                 <h2>Deposit / Withdraw</h2>
               </div>
-              <p className="muted">
-                Coming soon: Deposit more funds or withdraw from vault directly in the UI.
-              </p>
-              <p className="muted">
-                For now, use Sui CLI or call contract functions directly.
-              </p>
+
+              {!vault ? (
+                <div className="warning-banner">
+                  <p>Load a vault first to deposit or withdraw</p>
+                </div>
+              ) : !account ? (
+                <div className="warning-banner">
+                  <p>Connect wallet to manage funds</p>
+                  <ConnectButton />
+                </div>
+              ) : account.address !== vault.owner ? (
+                <div className="warning-banner">
+                  <p>Only the vault owner can deposit/withdraw</p>
+                  <p className="field-hint">Owner: {truncateAddress(vault.owner)}</p>
+                </div>
+              ) : (
+                <div className="deposit-withdraw-section">
+                  <div className="action-card">
+                    <h4><span className="icon">+</span> Deposit Funds</h4>
+                    <div className="action-row">
+                      <label className="field">
+                        Coin Object ID
+                        <input
+                          value={depositForm.coinObjectId}
+                          onChange={(e) => setDepositForm({ coinObjectId: e.target.value })}
+                          placeholder="0x... (coin object to deposit)"
+                        />
+                      </label>
+                      <button
+                        className="btn primary"
+                        onClick={executeDeposit}
+                        disabled={isExecuting || !depositForm.coinObjectId}
+                      >
+                        {isExecuting ? '...' : 'Deposit'}
+                      </button>
+                    </div>
+                    <span className="field-hint">
+                      Find your coin objects on Sui Explorer under your wallet
+                    </span>
+                  </div>
+
+                  <div className="action-card">
+                    <h4><span className="icon">-</span> Withdraw Funds</h4>
+                    <div className="action-row">
+                      <label className="field">
+                        Amount
+                        <input
+                          type="number"
+                          value={withdrawForm.amount}
+                          onChange={(e) => setWithdrawForm({ amount: e.target.value })}
+                          placeholder="10.00"
+                        />
+                      </label>
+                      <button
+                        className="btn"
+                        onClick={executeWithdraw}
+                        disabled={isExecuting || !withdrawForm.amount}
+                      >
+                        {isExecuting ? '...' : 'Withdraw'}
+                      </button>
+                    </div>
+                    <span className="field-hint">
+                      Current balance: {formatAmount(vault.balance)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -945,8 +1174,11 @@ export default function App() {
 
       {/* Footer */}
       <footer className="footer">
-        <div>AgentVault · HackMoney 2025 · Built on Sui</div>
+        <div>AgentVault · HackMoney 2026 · Built on Sui with DeepBook v3</div>
         <div className="footer-links">
+          <a href="https://docs.sui.io/standards/deepbookv3" target="_blank" rel="noreferrer" className="btn small ghost">
+            DeepBook Docs
+          </a>
           <a href="https://github.com" target="_blank" rel="noreferrer" className="btn small ghost">
             GitHub
           </a>

@@ -858,6 +858,111 @@ h1 {
 }
 
 /* ============================================================================
+   SELECT INPUT
+============================================================================ */
+
+.select-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%230e0e10' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+.select-input:hover {
+  background-color: #fff5e6;
+}
+
+/* ============================================================================
+   QUOTE DISPLAY
+============================================================================ */
+
+.quote-display {
+  margin: 16px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #f3e8ff 0%, #e8f4ff 100%);
+  border: 2px solid #C084FC;
+  border-radius: 12px;
+}
+
+.quote-header {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: rgba(14, 14, 16, 0.6);
+  margin-bottom: 4px;
+}
+
+.quote-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.quote-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(14, 14, 16, 0.7);
+}
+
+.quote-details span {
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+}
+
+/* ============================================================================
+   DEPOSIT/WITHDRAW FORMS
+============================================================================ */
+
+.deposit-withdraw-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.action-card {
+  padding: 16px;
+  border: 2px solid #eee;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.action-card h4 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-card .icon {
+  font-size: 1.2rem;
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.action-row .field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.action-row .btn {
+  flex-shrink: 0;
+}
+
+/* ============================================================================
    TRUNCATE UTILITY
 ============================================================================ */
 

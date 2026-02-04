@@ -250,14 +250,15 @@ router.post('/execute', async (req: Request, res: Response): Promise<void> => {
 
 /**
  * GET /api/swap/pools
- * Get available DeepBook pools
+ * Get available DeepBook pools with full metadata
  */
 router.get('/pools', (_req: Request, res: Response): void => {
   const pools = swapService.getAvailablePools();
   res.json({
     success: true,
     pools,
-    note: 'Pool IDs are for testnet. Update for mainnet deployment.',
+    network: 'testnet',
+    note: 'DeepBook v3 testnet pools. Requires DEEP tokens for trading fees.',
   });
 });
 
@@ -278,13 +279,20 @@ router.get('/quote', async (req: Request, res: Response): Promise<void> => {
     if (quote) {
       res.json({
         success: true,
-        quote,
+        quote: {
+          inputAmount: quantity,
+          estimatedOutput: quote.estimatedOutput,
+          midPrice: quote.midPrice,
+          priceImpact: quote.priceImpact,
+          estimatedFee: quote.estimatedFee,
+          direction: isBid ? 'buy' : 'sell',
+          pool: quote.poolInfo,
+        },
       });
     } else {
-      res.json({
-        success: true,
-        message: 'Quote endpoint not yet implemented. Coming soon.',
-        note: 'For now, use DeepBook UI or SDK directly for quotes.',
+      res.status(404).json({
+        success: false,
+        error: 'Could not fetch quote. Pool may not exist or be unavailable.',
       });
     }
   } catch (error) {
@@ -296,6 +304,7 @@ router.get('/quote', async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
+    console.error('Quote error:', error);
     res.status(500).json({
       success: false,
       error: 'Error fetching quote',

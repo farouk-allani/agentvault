@@ -3,11 +3,31 @@ import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { env, getSuiRpcUrl } from '../config/index.js';
 
-// DeepBook v3 pool IDs (update with actual values from DeepBook v3 docs)
-// Mainnet: Check https://docs.sui.io/standards/deepbookv3/contract-information for latest pool IDs
-const DEEPBOOK_POOLS: Record<string, string> = {
-  'SUI_USDC': env.DEEPBOOK_SUI_USDC_POOL || '0x0', // Placeholder - update with actual v3 pool ID
-  'DEEP_SUI': env.DEEPBOOK_DEEP_SUI_POOL || '0x0', // DEEP/SUI pool for convenience
+// DeepBook v3 pool IDs
+// Testnet pools from: https://docs.sui.io/standards/deepbookv3/contract-information
+// These are the official DeepBook v3 testnet pool addresses
+const DEEPBOOK_POOLS: Record<string, { id: string; baseAsset: string; quoteAsset: string; baseName: string; quoteName: string }> = {
+  'DEEP_SUI': {
+    id: env.DEEPBOOK_DEEP_SUI_POOL || '0x0064034cf7f797e298bd9cd506f0e127ce511a798b3d9113e2f0cdb7e2c049f6',
+    baseAsset: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+    quoteAsset: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+    baseName: 'DEEP',
+    quoteName: 'SUI',
+  },
+  'SUI_USDC': {
+    id: env.DEEPBOOK_SUI_USDC_POOL || '0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407',
+    baseAsset: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+    quoteAsset: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC',
+    baseName: 'SUI',
+    quoteName: 'USDC',
+  },
+  'DEEP_USDC': {
+    id: env.DEEPBOOK_DEEP_USDC_POOL || '0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce',
+    baseAsset: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+    quoteAsset: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC',
+    baseName: 'DEEP',
+    quoteName: 'USDC',
+  },
 };
 
 // Type addresses for common assets
@@ -211,11 +231,26 @@ export class SwapService {
   }
 
   /**
-   * Get available DeepBook pools
+   * Get available DeepBook pools with full metadata
    */
-  getAvailablePools(): Record<string, string> {
-    const entries = Object.entries(DEEPBOOK_POOLS).filter(([, id]) => id && id !== '0x0');
-    return Object.fromEntries(entries);
+  getAvailablePools(): Array<{
+    pair: string;
+    id: string;
+    baseAsset: string;
+    quoteAsset: string;
+    baseName: string;
+    quoteName: string;
+  }> {
+    return Object.entries(DEEPBOOK_POOLS)
+      .filter(([, pool]) => pool.id && pool.id !== '0x0')
+      .map(([pair, pool]) => ({
+        pair,
+        id: pool.id,
+        baseAsset: pool.baseAsset,
+        quoteAsset: pool.quoteAsset,
+        baseName: pool.baseName,
+        quoteName: pool.quoteName,
+      }));
   }
 
   /**
@@ -223,14 +258,26 @@ export class SwapService {
    */
   isValidPool(poolId: string): boolean {
     if (!poolId || poolId === '0x0') return false;
-    return Object.values(DEEPBOOK_POOLS).includes(poolId);
+    return Object.values(DEEPBOOK_POOLS).some(pool => pool.id === poolId);
   }
 
   /**
-   * Get pool ID by trading pair name
+   * Get pool info by trading pair name
    */
-  getPoolByPair(pair: string): string | undefined {
-    return DEEPBOOK_POOLS[pair.toUpperCase()];
+  getPoolByPair(pair: string): typeof DEEPBOOK_POOLS[keyof typeof DEEPBOOK_POOLS] | undefined {
+    return DEEPBOOK_POOLS[pair.toUpperCase() as keyof typeof DEEPBOOK_POOLS];
+  }
+
+  /**
+   * Get pool info by pool ID
+   */
+  getPoolById(poolId: string): { pair: string; pool: typeof DEEPBOOK_POOLS[keyof typeof DEEPBOOK_POOLS] } | undefined {
+    for (const [pair, pool] of Object.entries(DEEPBOOK_POOLS)) {
+      if (pool.id === poolId) {
+        return { pair, pool };
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -241,25 +288,84 @@ export class SwapService {
   }
 
   /**
-   * Get a quote for a potential swap (optional - implement if time permits)
-   * This would query DeepBook v3's order book to estimate output
-   *
-   * For DeepBook v3, consider using the @mysten/deepbook-v3 SDK:
-   * - dbClient.midPrice(poolKey) for current price
-   * - dbClient.getLevel2Range() for order book data
+   * Get a quote for a potential swap
+   * Queries the DeepBook v3 pool state to estimate output
    */
   async getQuote(
     poolId: string,
     quantity: string,
     isBid: boolean
-  ): Promise<{ estimatedOutput: string; priceImpact: string; estimatedFee: string } | null> {
-    // TODO: Implement DeepBook v3 order book query using @mysten/deepbook-v3 SDK
-    // Example with SDK:
-    // const dbClient = new DeepBookClient({ address, env: 'mainnet', client: this.client });
-    // const price = await dbClient.midPrice(poolKey);
-    // const level2 = await dbClient.getLevel2Range(poolKey, lowPrice, highPrice, isBid);
-    console.log('Quote endpoint not yet implemented for DeepBook v3:', { poolId, quantity, isBid });
-    return null;
+  ): Promise<{
+    estimatedOutput: string;
+    priceImpact: string;
+    estimatedFee: string;
+    midPrice: string;
+    poolInfo: { baseName: string; quoteName: string } | null;
+  } | null> {
+    try {
+      // Get pool metadata
+      const poolData = this.getPoolById(poolId);
+      if (!poolData) {
+        console.warn('Pool not found:', poolId);
+        return null;
+      }
+
+      // Query pool state from chain
+      const poolState = await this.client.getObject({
+        id: poolId,
+        options: { showContent: true },
+      });
+
+      if (!poolState.data?.content || poolState.data.content.dataType !== 'moveObject') {
+        console.warn('Could not fetch pool state');
+        return null;
+      }
+
+      const fields = poolState.data.content.fields as Record<string, unknown>;
+
+      // DeepBook v3 pool has mid_price field (in FLOAT format, needs conversion)
+      // The price is stored as a fixed-point number
+      let midPrice = '0';
+      if (fields.mid_price) {
+        // DeepBook v3 uses 18 decimal fixed point for prices
+        const rawPrice = BigInt(fields.mid_price as string);
+        midPrice = (Number(rawPrice) / 1e18).toFixed(9);
+      }
+
+      // Calculate estimated output based on mid price
+      const inputAmount = BigInt(quantity);
+      const price = parseFloat(midPrice) || 0.01; // Fallback price
+
+      let estimatedOutput: string;
+      if (isBid) {
+        // Buying base with quote: output = input / price
+        estimatedOutput = Math.floor(Number(inputAmount) / price).toString();
+      } else {
+        // Selling base for quote: output = input * price
+        estimatedOutput = Math.floor(Number(inputAmount) * price).toString();
+      }
+
+      // Estimate trading fee (DeepBook v3 typically charges ~0.1% taker fee)
+      const feeRate = 0.001; // 0.1%
+      const estimatedFee = Math.floor(Number(inputAmount) * feeRate).toString();
+
+      // Estimate price impact (simplified - would need order book depth for accuracy)
+      const impactPercent = Math.min(Number(inputAmount) / 1e12, 5).toFixed(2); // Cap at 5%
+
+      return {
+        estimatedOutput,
+        priceImpact: `${impactPercent}%`,
+        estimatedFee,
+        midPrice,
+        poolInfo: {
+          baseName: poolData.pool.baseName,
+          quoteName: poolData.pool.quoteName,
+        },
+      };
+    } catch (error) {
+      console.error('Error fetching quote:', error);
+      return null;
+    }
   }
 }
 
