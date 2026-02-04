@@ -876,6 +876,79 @@ h1 {
 }
 
 /* ============================================================================
+   COIN SELECTOR
+============================================================================ */
+
+.coin-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%230e0e10' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+  padding-right: 40px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.coin-select:hover {
+  background-color: #fff5e6;
+}
+
+.coin-loading {
+  padding: 12px 14px;
+  background: #f5f5f5;
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  color: rgba(14, 14, 16, 0.6);
+  font-weight: 500;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.coin-empty {
+  padding: 12px 14px;
+  background: #fef3c7;
+  border: 2px solid var(--warning);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.coin-empty-inline {
+  padding: 10px 12px;
+  background: #fef3c7;
+  border: 2px solid var(--warning);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.link-btn:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ============================================================================
    QUOTE DISPLAY
 ============================================================================ */
 

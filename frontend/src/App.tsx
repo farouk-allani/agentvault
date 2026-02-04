@@ -3,6 +3,7 @@ import {
   ConnectButton,
   useCurrentAccount,
   useSignAndExecuteTransaction,
+  useSuiClient,
 } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 
@@ -101,6 +102,39 @@ interface QuoteResult {
 
 type TabType = 'dashboard' | 'swap' | 'create' | 'manage';
 
+interface UserCoin {
+  objectId: string;
+  coinType: string;
+  balance: string;
+  symbol: string;
+}
+
+// Known coin types on testnet - maps type to symbol
+const KNOWN_COINS: Record<string, { symbol: string; decimals: number }> = {
+  '0x2::sui::SUI': { symbol: 'SUI', decimals: 9 },
+  '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP': { symbol: 'DEEP', decimals: 6 },
+};
+
+function getCoinSymbol(coinType: string): string {
+  if (KNOWN_COINS[coinType]) {
+    return KNOWN_COINS[coinType].symbol;
+  }
+  // Extract symbol from type path (e.g., 0x...::usdc::USDC -> USDC)
+  const parts = coinType.split('::');
+  if (parts.length >= 3) {
+    return parts[parts.length - 1].toUpperCase();
+  }
+  return 'UNKNOWN';
+}
+
+function getCoinDecimals(coinType: string): number {
+  if (KNOWN_COINS[coinType]) {
+    return KNOWN_COINS[coinType].decimals;
+  }
+  // Default to 9 decimals (SUI standard) if unknown
+  return 9;
+}
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -174,6 +208,11 @@ export default function App() {
   // Wallet state
   const account = useCurrentAccount();
   const { mutate: signAndExecute, isPending: isExecuting } = useSignAndExecuteTransaction();
+  const suiClient = useSuiClient();
+
+  // User's coins state
+  const [userCoins, setUserCoins] = useState<UserCoin[]>([]);
+  const [loadingCoins, setLoadingCoins] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -241,6 +280,58 @@ export default function App() {
       notify('Failed to copy', 'error');
     }
   }, [notify]);
+
+  // Fetch user's coins from wallet
+  const fetchUserCoins = useCallback(async () => {
+    if (!account?.address) {
+      setUserCoins([]);
+      return;
+    }
+
+    setLoadingCoins(true);
+    try {
+      const allCoins: UserCoin[] = [];
+      let cursor: string | null = null;
+
+      // Fetch all coins (paginated)
+      do {
+        const response = await suiClient.getAllCoins({
+          owner: account.address,
+          cursor: cursor ?? undefined,
+        });
+
+        for (const coin of response.data) {
+          allCoins.push({
+            objectId: coin.coinObjectId,
+            coinType: coin.coinType,
+            balance: coin.balance,
+            symbol: getCoinSymbol(coin.coinType),
+          });
+        }
+
+        cursor = response.nextCursor ?? null;
+      } while (cursor);
+
+      // Sort by balance (highest first)
+      allCoins.sort((a, b) => {
+        const balA = BigInt(a.balance);
+        const balB = BigInt(b.balance);
+        return balB > balA ? 1 : balB < balA ? -1 : 0;
+      });
+
+      setUserCoins(allCoins);
+    } catch (err) {
+      console.error('Failed to fetch coins:', err);
+      notify('Failed to load wallet coins', 'error');
+    } finally {
+      setLoadingCoins(false);
+    }
+  }, [account?.address, suiClient, notify]);
+
+  // Load user coins when account changes
+  useEffect(() => {
+    fetchUserCoins();
+  }, [fetchUserCoins]);
 
   // ============================================================================
   // API CALLS
@@ -1006,14 +1097,32 @@ export default function App() {
                   </label>
 
                   <label className="field">
-                    Initial Deposit Coin Object ID
-                    <input
-                      value={createForm.coinObjectId}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, coinObjectId: e.target.value }))}
-                      placeholder="0x... (USDC or SUI coin object)"
-                    />
+                    Select Coin to Deposit
+                    {loadingCoins ? (
+                      <div className="coin-loading">Loading your coins...</div>
+                    ) : userCoins.length === 0 ? (
+                      <div className="coin-empty">
+                        <span>No coins found in wallet</span>
+                        <button type="button" className="btn small" onClick={fetchUserCoins}>
+                          Refresh
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={createForm.coinObjectId}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, coinObjectId: e.target.value }))}
+                        className="coin-select"
+                      >
+                        <option value="">-- Select a coin --</option>
+                        {userCoins.map((coin) => (
+                          <option key={coin.objectId} value={coin.objectId}>
+                            {coin.symbol} - {formatAmount(coin.balance, getCoinDecimals(coin.coinType))} ({truncateAddress(coin.objectId)})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <span className="field-hint">
-                      Find coin objects in your wallet on Sui Explorer
+                      Choose from your wallet coins • <button type="button" className="link-btn" onClick={fetchUserCoins}>Refresh list</button>
                     </span>
                   </label>
 
@@ -1121,12 +1230,28 @@ export default function App() {
                     <h4><span className="icon">+</span> Deposit Funds</h4>
                     <div className="action-row">
                       <label className="field">
-                        Coin Object ID
-                        <input
-                          value={depositForm.coinObjectId}
-                          onChange={(e) => setDepositForm({ coinObjectId: e.target.value })}
-                          placeholder="0x... (coin object to deposit)"
-                        />
+                        Select Coin
+                        {loadingCoins ? (
+                          <div className="coin-loading">Loading...</div>
+                        ) : userCoins.length === 0 ? (
+                          <div className="coin-empty-inline">
+                            <span>No coins</span>
+                            <button type="button" className="btn small" onClick={fetchUserCoins}>↻</button>
+                          </div>
+                        ) : (
+                          <select
+                            value={depositForm.coinObjectId}
+                            onChange={(e) => setDepositForm({ coinObjectId: e.target.value })}
+                            className="coin-select"
+                          >
+                            <option value="">-- Select --</option>
+                            {userCoins.map((coin) => (
+                              <option key={coin.objectId} value={coin.objectId}>
+                                {coin.symbol} - {formatAmount(coin.balance, getCoinDecimals(coin.coinType))}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </label>
                       <button
                         className="btn primary"
@@ -1137,7 +1262,7 @@ export default function App() {
                       </button>
                     </div>
                     <span className="field-hint">
-                      Find your coin objects on Sui Explorer under your wallet
+                      <button type="button" className="link-btn" onClick={fetchUserCoins}>Refresh coins</button>
                     </span>
                   </div>
 
