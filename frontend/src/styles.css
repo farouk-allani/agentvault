@@ -1047,6 +1047,254 @@ h1 {
 }
 
 /* ============================================================================
+   TOKEN ICONS
+============================================================================ */
+
+.token-icon-small {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.token-icon-medium {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.token-icon-large {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.token-balance {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.asset-type {
+  padding: 2px 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+/* ============================================================================
+   VAULT TOKEN INFO
+============================================================================ */
+
+.vault-token-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f3e8ff 0%, #e8f4ff 100%);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.vault-token-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* ============================================================================
+   COIN SELECTOR GRID (Brutalist Style)
+============================================================================ */
+
+.coin-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.coin-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  text-align: left;
+}
+
+.coin-selector-item:hover {
+  background: #f5f5f5;
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.coin-selector-item.selected {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.coin-selector-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border: 2px solid var(--ink);
+}
+
+.coin-selector-item.selected .coin-selector-icon {
+  border-color: var(--paper);
+}
+
+.coin-selector-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.coin-fallback-icon {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+
+.coin-selector-item.selected .coin-fallback-icon {
+  color: var(--paper);
+}
+
+.coin-selector-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.coin-selector-symbol {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.coin-selector-balance {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.coin-selector-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: var(--success);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+/* ============================================================================
+   VAULT BALANCE CARD
+============================================================================ */
+
+.vault-balance-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 3px solid var(--success);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.vault-balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.vault-balance-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vault-balance-amount {
+  font-size: 2rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ink);
+}
+
+.vault-balance-symbol {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: rgba(14, 14, 16, 0.6);
+}
+
+/* ============================================================================
+   SELECTED COIN PREVIEW
+============================================================================ */
+
+.selected-coin-preview {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f3e8ff;
+  border: 2px solid #C084FC;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.selected-coin-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+}
+
+/* ============================================================================
+   WITHDRAW INFO
+============================================================================ */
+
+.withdraw-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* ============================================================================
+   CONSTRAINT TITLE ROW
+============================================================================ */
+
+.constraint-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ============================================================================
    RESPONSIVE
 ============================================================================ */
 

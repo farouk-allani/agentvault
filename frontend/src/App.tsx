@@ -136,6 +136,37 @@ const KNOWN_COINS: Record<string, { symbol: string; decimals: number }> = {
   '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC': { symbol: 'USDC', decimals: 6 },
 };
 
+// Token icons mapping - using known sources
+const TOKEN_ICONS: Record<string, string> = {
+  SUI: 'https://assets.coingecko.com/coins/images/26375/standard/sui_asset.jpeg',
+  USDC: 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png',
+  DBUSDC: 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png', // Same as USDC
+  USDT: 'https://s2.coinmarketcap.com/static/img/coins/64x64/825.png',
+  DEEP: 'https://s2.coinmarketcap.com/static/img/coins/64x64/33391.png',
+  WAL: 'https://faucet.suilearn.io/_next/image?url=%2Fimages%2Ftokens%2Fwal.png&w=96&q=75',
+  ETH: 'https://faucet.suilearn.io/_next/image?url=%2Fimages%2Ftokens%2Feth.png&w=96&q=75',
+  WETH: 'https://faucet.suilearn.io/_next/image?url=%2Fimages%2Ftokens%2Feth.png&w=96&q=75',
+};
+
+function getTokenIcon(symbol: string): string | null {
+  // Normalize symbol for matching (handle variations like wUSDC, testUSDC, etc.)
+  const normalizedSymbol = symbol.toUpperCase();
+
+  // Direct match
+  if (TOKEN_ICONS[normalizedSymbol]) {
+    return TOKEN_ICONS[normalizedSymbol];
+  }
+
+  // Check if it contains a known token name
+  for (const [key, url] of Object.entries(TOKEN_ICONS)) {
+    if (normalizedSymbol.includes(key)) {
+      return url;
+    }
+  }
+
+  return null;
+}
+
 function getCoinSymbol(coinType: string): string {
   if (KNOWN_COINS[coinType]) {
     return KNOWN_COINS[coinType].symbol;
@@ -149,10 +180,37 @@ function getCoinSymbol(coinType: string): string {
 }
 
 function getCoinDecimals(coinType: string): number {
+  // Check exact match first
   if (KNOWN_COINS[coinType]) {
     return KNOWN_COINS[coinType].decimals;
   }
-  // Default to 9 decimals (SUI standard) if unknown
+
+  // Smart detection by symbol name for unknown coin addresses
+  // Extract the symbol from the type path (e.g., 0x...::usdc::USDC -> USDC)
+  const parts = coinType.split('::');
+  if (parts.length >= 3) {
+    const symbol = parts[parts.length - 1].toUpperCase();
+
+    // Stablecoins and common tokens with 6 decimals
+    if (
+      symbol.includes('USDC') ||
+      symbol.includes('USDT') ||
+      symbol.includes('DAI') ||
+      symbol.includes('BUSD') ||
+      symbol === 'DEEP' ||
+      symbol === 'DBUSDC'
+    ) {
+      return 6;
+    }
+
+    // ETH variants typically have 8 decimals on some chains, but 18 on others
+    // For Sui wrapped ETH, it's usually 8
+    if (symbol.includes('ETH') || symbol.includes('WETH')) {
+      return 8;
+    }
+  }
+
+  // Default to 9 decimals (SUI standard) for native SUI and unknown tokens
   return 9;
 }
 
@@ -285,7 +343,7 @@ export default function App() {
   });
 
   // Deposit/Withdraw state
-  const [depositForm, setDepositForm] = useState({ coinObjectId: '' });
+  const [depositForm, setDepositForm] = useState({ coinObjectId: '', amount: '' });
   const [withdrawForm, setWithdrawForm] = useState({ amount: '' });
 
   // Payment state
@@ -613,16 +671,26 @@ export default function App() {
   }, [intentResult, account?.address, createForm, userCoins, signAndExecute, notify, loadUserVaults]);
 
   const executeDeposit = useCallback(async () => {
-    if (!vaultId || !account?.address || !depositForm.coinObjectId) {
+    if (!vaultId || !account?.address || !depositForm.coinObjectId || !vault) {
       notify('Enter coin object ID to deposit', 'error');
       return;
     }
+
+    // Find the selected coin to get its type (should match vault's asset type)
+    const selectedCoin = userCoins.find((c) => c.objectId === depositForm.coinObjectId);
+    if (!selectedCoin) {
+      notify('Selected coin not found', 'error');
+      return;
+    }
+
+    // Use vault's asset type (the coin type must match for the deposit to work)
+    const assetType = vault.assetType;
 
     try {
       const tx = new Transaction();
       tx.moveCall({
         target: `${import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434'}::vault::deposit`,
-        typeArguments: ['0x2::sui::SUI'], // Default to SUI, can be made dynamic
+        typeArguments: [assetType],
         arguments: [
           tx.object(vaultId),
           tx.object(depositForm.coinObjectId),
@@ -638,7 +706,7 @@ export default function App() {
               { digest: txResult.digest, type: 'deposit', amount: 'N/A', timestamp: Date.now() },
               ...prev.slice(0, 9),
             ]);
-            setDepositForm({ coinObjectId: '' });
+            setDepositForm({ coinObjectId: '', amount: '' });
             setTimeout(loadVaultStatus, 2000);
           },
           onError: (error) => {
@@ -649,22 +717,26 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, depositForm, signAndExecute, notify, loadVaultStatus]);
+  }, [vaultId, account?.address, depositForm, vault, userCoins, signAndExecute, notify, loadVaultStatus]);
 
   const executeWithdraw = useCallback(async () => {
-    if (!vaultId || !account?.address || !withdrawForm.amount) {
+    if (!vaultId || !account?.address || !withdrawForm.amount || !vault) {
       notify('Enter amount to withdraw', 'error');
       return;
     }
 
     try {
+      const assetType = vault.assetType;
+      const decimals = getCoinDecimals(assetType);
+      const amountRaw = parseAmount(withdrawForm.amount, decimals);
+
       const tx = new Transaction();
       tx.moveCall({
         target: `${import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434'}::vault::withdraw`,
-        typeArguments: ['0x2::sui::SUI'], // Default to SUI, can be made dynamic
+        typeArguments: [assetType],
         arguments: [
           tx.object(vaultId),
-          tx.pure.u64(BigInt(parseAmount(withdrawForm.amount))),
+          tx.pure.u64(BigInt(amountRaw)),
         ],
       });
 
@@ -688,7 +760,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, withdrawForm, signAndExecute, notify, loadVaultStatus]);
+  }, [vaultId, account?.address, withdrawForm, vault, signAndExecute, notify, loadVaultStatus]);
 
   // Validate payment against constraints in real-time
   const validatePayment = useCallback((amount: string): PaymentValidation => {
@@ -889,18 +961,21 @@ export default function App() {
   // ============================================================================
 
   const stats = useMemo(() => {
-    if (!status?.status) return null;
+    if (!status?.status || !vault) return null;
     const s = status.status;
+    const decimals = getCoinDecimals(vault.assetType);
+    const symbol = getCoinSymbol(vault.assetType);
+
     return {
-      daily: s.limits.dailyFormatted,
-      perTx: s.limits.perTxFormatted,
-      spent: s.spending.todayFormatted,
-      remaining: s.limits.remainingDailyFormatted,
+      daily: `${formatAmount(vault.constraints.dailyLimit, decimals)} ${symbol}`,
+      perTx: `${formatAmount(vault.constraints.perTxLimit, decimals)} ${symbol}`,
+      spent: `${formatAmount(vault.spentToday, decimals)} ${symbol}`,
+      remaining: `${formatAmount((BigInt(vault.constraints.dailyLimit || '0') - BigInt(vault.spentToday || '0')).toString(), decimals)} ${symbol}`,
       usage: s.limits.dailyUsagePercent ?? 0,
-      balance: s.balance.formatted,
+      balance: `${formatAmount(vault.balance, decimals)} ${symbol}`,
       txCount: s.spending.txCount,
     };
-  }, [status]);
+  }, [status, vault]);
 
   const usageColor = useMemo(() => {
     if (!stats) return '#0e0e10';
@@ -1059,7 +1134,20 @@ export default function App() {
                   </div>
                   <div className="detail-row">
                     <span className="meta-label">Balance</span>
-                    <span className="detail-value">{formatAmount(vault.balance)}</span>
+                    <span className="detail-value token-balance">
+                      {getTokenIcon(getCoinSymbol(vault.assetType)) && (
+                        <img
+                          src={getTokenIcon(getCoinSymbol(vault.assetType)) || ''}
+                          alt={getCoinSymbol(vault.assetType)}
+                          className="token-icon-small"
+                        />
+                      )}
+                      {formatAmount(vault.balance, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}
+                    </span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="meta-label">Asset Type</span>
+                    <span className="detail-value asset-type">{getCoinSymbol(vault.assetType)}</span>
                   </div>
                   <div className="link-row">
                     <a href={explorerUrl('object', vaultId)} target="_blank" rel="noreferrer" className="link">
@@ -1390,26 +1478,62 @@ export default function App() {
                         </button>
                       </div>
                     ) : (
-                      <select
-                        value={createForm.coinObjectId}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, coinObjectId: e.target.value }))}
-                        className="coin-select"
-                      >
-                        <option value="">-- Select a coin --</option>
-                        {userCoins.map((coin) => (
-                          <option key={coin.objectId} value={coin.objectId}>
-                            {coin.symbol} - {formatAmount(coin.balance, getCoinDecimals(coin.coinType))} ({truncateAddress(coin.objectId)})
-                          </option>
-                        ))}
-                      </select>
+                      <div className="coin-selector-grid">
+                        {userCoins.map((coin) => {
+                          const isSelected = createForm.coinObjectId === coin.objectId;
+                          const icon = getTokenIcon(coin.symbol);
+                          return (
+                            <button
+                              key={coin.objectId}
+                              type="button"
+                              className={`coin-selector-item ${isSelected ? 'selected' : ''}`}
+                              onClick={() => setCreateForm((f) => ({ ...f, coinObjectId: coin.objectId }))}
+                            >
+                              <div className="coin-selector-icon">
+                                {icon ? (
+                                  <img src={icon} alt={coin.symbol} />
+                                ) : (
+                                  <span className="coin-fallback-icon">{coin.symbol.charAt(0)}</span>
+                                )}
+                              </div>
+                              <div className="coin-selector-info">
+                                <span className="coin-selector-symbol">{coin.symbol}</span>
+                                <span className="coin-selector-balance">
+                                  {formatAmount(coin.balance, getCoinDecimals(coin.coinType))}
+                                </span>
+                              </div>
+                              {isSelected && <span className="coin-selector-check">✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                     <span className="field-hint">
                       Choose from your wallet coins • <button type="button" className="link-btn" onClick={fetchUserCoins}>Refresh list</button>
                     </span>
                   </label>
 
+                  {createForm.coinObjectId && (
+                    <div className="selected-coin-preview">
+                      {(() => {
+                        const selectedCoin = userCoins.find((c) => c.objectId === createForm.coinObjectId);
+                        if (!selectedCoin) return null;
+                        const icon = getTokenIcon(selectedCoin.symbol);
+                        return (
+                          <div className="selected-coin-info">
+                            {icon && <img src={icon} alt={selectedCoin.symbol} className="token-icon-small" />}
+                            <span>
+                              Creating vault with: <strong>{formatAmount(selectedCoin.balance, getCoinDecimals(selectedCoin.coinType))} {selectedCoin.symbol}</strong>
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   <button
                     className="btn primary"
+                    style={{marginTop:'8px'}}
                     onClick={executeCreateVault}
                     disabled={isExecuting || !createForm.agentAddress || !createForm.coinObjectId}
                   >
@@ -1458,7 +1582,16 @@ export default function App() {
                   {/* Constraint Status Display */}
                   <div className="constraint-status">
                     <div className="constraint-header">
-                      <span className="constraint-title">Spending Limits</span>
+                      <div className="constraint-title-row">
+                        {getTokenIcon(getCoinSymbol(vault.assetType)) && (
+                          <img
+                            src={getTokenIcon(getCoinSymbol(vault.assetType)) || ''}
+                            alt={getCoinSymbol(vault.assetType)}
+                            className="token-icon-small"
+                          />
+                        )}
+                        <span className="constraint-title">Spending Limits ({getCoinSymbol(vault.assetType)})</span>
+                      </div>
                       <button className="btn-icon small" onClick={loadVaultStatus} disabled={loading.status}>
                         {loading.status ? '...' : '↻'}
                       </button>
@@ -1466,33 +1599,33 @@ export default function App() {
                     <div className="constraint-grid">
                       <div className="constraint-item">
                         <span className="constraint-label">Per Transaction</span>
-                        <span className="constraint-value">{formatAmount(vault.constraints.perTxLimit)}</span>
+                        <span className="constraint-value">{formatAmount(vault.constraints.perTxLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                       <div className="constraint-item">
                         <span className="constraint-label">Daily Limit</span>
-                        <span className="constraint-value">{formatAmount(vault.constraints.dailyLimit)}</span>
+                        <span className="constraint-value">{formatAmount(vault.constraints.dailyLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                       <div className="constraint-item">
                         <span className="constraint-label">Spent Today</span>
-                        <span className="constraint-value spent">{formatAmount(vault.spentToday)}</span>
+                        <span className="constraint-value spent">{formatAmount(vault.spentToday, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                       <div className="constraint-item">
                         <span className="constraint-label">Remaining</span>
-                        <span className="constraint-value remaining" style={{ 
-                          color: BigInt(vault.constraints.dailyLimit) - BigInt(vault.spentToday) <= 0n ? '#ef4444' : '#22c55e' 
+                        <span className="constraint-value remaining" style={{
+                          color: BigInt(vault.constraints.dailyLimit || '0') - BigInt(vault.spentToday || '0') <= 0n ? '#ef4444' : '#22c55e'
                         }}>
-                          {formatAmount((BigInt(vault.constraints.dailyLimit) - BigInt(vault.spentToday)).toString())}
+                          {formatAmount((BigInt(vault.constraints.dailyLimit || '0') - BigInt(vault.spentToday || '0')).toString(), getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}
                         </span>
                       </div>
                     </div>
                     <div className="constraint-bar">
-                      <div 
-                        className="constraint-bar-fill" 
-                        style={{ 
-                          width: `${Math.min(100, Number(BigInt(vault.spentToday) * 100n / BigInt(vault.constraints.dailyLimit || '1')))}%`,
-                          background: Number(BigInt(vault.spentToday) * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 90 ? '#ef4444' : 
-                                      Number(BigInt(vault.spentToday) * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 70 ? '#f59e0b' : '#22c55e'
-                        }} 
+                      <div
+                        className="constraint-bar-fill"
+                        style={{
+                          width: `${Math.min(100, Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')))}%`,
+                          background: Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 90 ? '#ef4444' :
+                                      Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 70 ? '#f59e0b' : '#22c55e'
+                        }}
                       />
                     </div>
                   </div>
@@ -1668,22 +1801,32 @@ export default function App() {
                 <>
                   <div className="control-section">
                     <h4>Current Settings</h4>
+                    <div className="vault-token-info">
+                      {getTokenIcon(getCoinSymbol(vault.assetType)) && (
+                        <img
+                          src={getTokenIcon(getCoinSymbol(vault.assetType)) || ''}
+                          alt={getCoinSymbol(vault.assetType)}
+                          className="token-icon-medium"
+                        />
+                      )}
+                      <span className="vault-token-name">{getCoinSymbol(vault.assetType)} Vault</span>
+                    </div>
                     <div className="settings-grid">
                       <div>
                         <span className="meta-label">Daily Limit</span>
-                        <span>{formatAmount(vault.constraints.dailyLimit)}</span>
+                        <span>{formatAmount(vault.constraints.dailyLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                       <div>
                         <span className="meta-label">Per-TX Limit</span>
-                        <span>{formatAmount(vault.constraints.perTxLimit)}</span>
+                        <span>{formatAmount(vault.constraints.perTxLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                       <div>
                         <span className="meta-label">Min Balance</span>
-                        <span>{formatAmount(vault.constraints.minBalance)}</span>
+                        <span>{formatAmount(vault.constraints.minBalance, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                       <div>
                         <span className="meta-label">Alert At</span>
-                        <span>{formatAmount(vault.constraints.alertThreshold)}</span>
+                        <span>{formatAmount(vault.constraints.alertThreshold, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                     </div>
                   </div>
@@ -1736,57 +1879,128 @@ export default function App() {
                 </div>
               ) : (
                 <div className="deposit-withdraw-section">
-                  <div className="action-card">
-                    <h4><span className="icon">+</span> Deposit Funds</h4>
-                    <div className="action-row">
-                      <label className="field">
-                        Select Coin
-                        {loadingCoins ? (
-                          <div className="coin-loading">Loading...</div>
-                        ) : userCoins.length === 0 ? (
-                          <div className="coin-empty-inline">
-                            <span>No coins</span>
-                            <button type="button" className="btn small" onClick={fetchUserCoins}>↻</button>
-                          </div>
-                        ) : (
-                          <select
-                            value={depositForm.coinObjectId}
-                            onChange={(e) => setDepositForm({ coinObjectId: e.target.value })}
-                            className="coin-select"
-                          >
-                            <option value="">-- Select --</option>
-                            {userCoins.map((coin) => (
-                              <option key={coin.objectId} value={coin.objectId}>
-                                {coin.symbol} - {formatAmount(coin.balance, getCoinDecimals(coin.coinType))}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </label>
-                      <button
-                        className="btn primary"
-                        onClick={executeDeposit}
-                        disabled={isExecuting || !depositForm.coinObjectId}
-                      >
-                        {isExecuting ? '...' : 'Deposit'}
+                  {/* Vault Balance Display */}
+                  <div className="vault-balance-card">
+                    <div className="vault-balance-header">
+                      <span className="meta-label">Vault Balance</span>
+                      <button className="btn-icon small" onClick={loadVaultStatus} disabled={loading.status}>
+                        {loading.status ? '...' : '↻'}
                       </button>
                     </div>
-                    <span className="field-hint">
-                      <button type="button" className="link-btn" onClick={fetchUserCoins}>Refresh coins</button>
-                    </span>
+                    <div className="vault-balance-display">
+                      {getTokenIcon(getCoinSymbol(vault.assetType)) && (
+                        <img
+                          src={getTokenIcon(getCoinSymbol(vault.assetType)) || ''}
+                          alt={getCoinSymbol(vault.assetType)}
+                          className="token-icon-large"
+                        />
+                      )}
+                      <span className="vault-balance-amount">
+                        {formatAmount(vault.balance, getCoinDecimals(vault.assetType))}
+                      </span>
+                      <span className="vault-balance-symbol">{getCoinSymbol(vault.assetType)}</span>
+                    </div>
+                  </div>
+
+                  <div className="action-card">
+                    <h4><span className="icon">+</span> Deposit Funds</h4>
+                    <label className="field">
+                      Select Coin from Wallet
+                      {loadingCoins ? (
+                        <div className="coin-loading">Loading your coins...</div>
+                      ) : userCoins.length === 0 ? (
+                        <div className="coin-empty-inline">
+                          <span>No coins in wallet</span>
+                          <button type="button" className="btn small" onClick={fetchUserCoins}>↻</button>
+                        </div>
+                      ) : (
+                        <div className="coin-selector-grid">
+                          {userCoins.map((coin) => {
+                            const isSelected = depositForm.coinObjectId === coin.objectId;
+                            const icon = getTokenIcon(coin.symbol);
+                            return (
+                              <button
+                                key={coin.objectId}
+                                type="button"
+                                className={`coin-selector-item ${isSelected ? 'selected' : ''}`}
+                                onClick={() => setDepositForm((f) => ({ ...f, coinObjectId: coin.objectId, amount: '' }))}
+                              >
+                                <div className="coin-selector-icon">
+                                  {icon ? (
+                                    <img src={icon} alt={coin.symbol} />
+                                  ) : (
+                                    <span className="coin-fallback-icon">{coin.symbol.charAt(0)}</span>
+                                  )}
+                                </div>
+                                <div className="coin-selector-info">
+                                  <span className="coin-selector-symbol">{coin.symbol}</span>
+                                  <span className="coin-selector-balance">
+                                    {formatAmount(coin.balance, getCoinDecimals(coin.coinType))}
+                                  </span>
+                                </div>
+                                {isSelected && <span className="coin-selector-check">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <span className="field-hint">
+                        <button type="button" className="link-btn" onClick={fetchUserCoins}>Refresh coins</button>
+                        {' · '}Deposits the entire coin object to the vault
+                      </span>
+                    </label>
+
+                    {depositForm.coinObjectId && (
+                      <div className="selected-coin-preview">
+                        {(() => {
+                          const selectedCoin = userCoins.find((c) => c.objectId === depositForm.coinObjectId);
+                          if (!selectedCoin) return null;
+                          const icon = getTokenIcon(selectedCoin.symbol);
+                          return (
+                            <>
+                              <div className="selected-coin-info">
+                                {icon && <img src={icon} alt={selectedCoin.symbol} className="token-icon-small" />}
+                                <span>Depositing: <strong>{formatAmount(selectedCoin.balance, getCoinDecimals(selectedCoin.coinType))} {selectedCoin.symbol}</strong></span>
+                              </div>
+                              <button
+                                className="btn primary"
+                                onClick={executeDeposit}
+                                disabled={isExecuting}
+                              >
+                                {isExecuting ? 'Depositing...' : `Deposit ${selectedCoin.symbol}`}
+                              </button>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   <div className="action-card">
                     <h4><span className="icon">-</span> Withdraw Funds</h4>
+                    <div className="withdraw-info">
+                      {getTokenIcon(getCoinSymbol(vault.assetType)) && (
+                        <img
+                          src={getTokenIcon(getCoinSymbol(vault.assetType)) || ''}
+                          alt={getCoinSymbol(vault.assetType)}
+                          className="token-icon-small"
+                        />
+                      )}
+                      <span>Available: <strong>{formatAmount(vault.balance, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</strong></span>
+                    </div>
                     <div className="action-row">
                       <label className="field">
-                        Amount
-                        <input
-                          type="number"
-                          value={withdrawForm.amount}
-                          onChange={(e) => setWithdrawForm({ amount: e.target.value })}
-                          placeholder="10.00"
-                        />
+                        Amount to Withdraw
+                        <div className="amount-input-wrapper">
+                          <input
+                            type="number"
+                            value={withdrawForm.amount}
+                            onChange={(e) => setWithdrawForm({ amount: e.target.value })}
+                            placeholder="0.00"
+                            className="input-amount"
+                          />
+                          <span className="amount-suffix">{getCoinSymbol(vault.assetType)}</span>
+                        </div>
                       </label>
                       <button
                         className="btn"
@@ -1796,9 +2010,22 @@ export default function App() {
                         {isExecuting ? '...' : 'Withdraw'}
                       </button>
                     </div>
-                    <span className="field-hint">
-                      Current balance: {formatAmount(vault.balance)}
-                    </span>
+                    <div className="quick-amounts" style={{marginTop:'8px'}}>
+                      {[0.1, 0.5, 1].map((pct) => {
+                        const maxBalance = parseFloat(formatAmount(vault.balance, getCoinDecimals(vault.assetType)));
+                        const amount = (maxBalance * pct).toFixed(2);
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            className="quick-amount-btn"
+                            onClick={() => setWithdrawForm({ amount })}
+                          >
+                            {pct === 1 ? 'Max' : `${pct * 100}%`}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
