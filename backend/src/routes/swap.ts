@@ -64,11 +64,34 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Validate pool ID against configured DeepBook v3 pools
-    if (!swapService.isValidPool(request.poolId)) {
+    const poolInfo = swapService.getPoolById(request.poolId);
+    if (!poolInfo) {
       res.status(400).json({
         success: false,
-        error: 'Invalid or unsupported pool ID',
+        error: 'Invalid or unsupported pool ID. Use /api/swap/pools to see available pools.',
         errorCode: 'INVALID_POOL',
+      });
+      return;
+    }
+
+    // Validate pool's quote asset matches vault's asset type
+    // Pool is Pool<BaseAsset, QuoteAsset>, Vault is Vault<QuoteAsset>
+    // They must match for the swap to work
+    const normalizeType = (t: string) => t.replace(/^0x0+/, '0x');
+    const poolQuoteNorm = normalizeType(poolInfo.pool.quoteAsset);
+    const vaultAssetNorm = normalizeType(vault.assetType);
+
+    if (poolQuoteNorm !== vaultAssetNorm) {
+      res.status(400).json({
+        success: false,
+        error: `Pool/vault type mismatch. Pool quote asset is ${poolInfo.pool.quoteName} but vault holds a different asset. Use a pool with matching quote asset.`,
+        errorCode: 'TYPE_MISMATCH',
+        details: {
+          poolQuoteAsset: poolInfo.pool.quoteAsset,
+          poolQuoteName: poolInfo.pool.quoteName,
+          vaultAssetType: vault.assetType,
+          suggestion: `For this vault, use a pool where the quote asset matches the vault's asset type.`,
+        },
       });
       return;
     }
@@ -126,11 +149,12 @@ router.post('/build', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Build the transaction
+    // Build the transaction using the pool's asset types (validated to match vault)
+    // Pool<BaseAsset, QuoteAsset> and Vault<QuoteAsset> types must match
     const tx = swapService.buildSwapTransaction(
       request,
-      request.baseAssetType,
-      request.quoteAssetType
+      poolInfo.pool.baseAsset,   // Use pool's base asset type
+      poolInfo.pool.quoteAsset   // Use pool's quote asset type (matches vault)
     );
     tx.setSender(request.agentAddress);
 
@@ -196,11 +220,23 @@ router.post('/execute', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Validate pool ID against configured DeepBook v3 pools
-    if (!swapService.isValidPool(request.poolId)) {
+    const poolInfo = swapService.getPoolById(request.poolId);
+    if (!poolInfo) {
       res.status(400).json({
         success: false,
         error: 'Invalid or unsupported pool ID',
         errorCode: 'INVALID_POOL',
+      });
+      return;
+    }
+
+    // Validate pool's quote asset matches vault's asset type
+    const normalizeType = (t: string) => t.replace(/^0x0+/, '0x');
+    if (normalizeType(poolInfo.pool.quoteAsset) !== normalizeType(vault.assetType)) {
+      res.status(400).json({
+        success: false,
+        error: `Pool/vault type mismatch. Pool quote is ${poolInfo.pool.quoteName}, vault is different.`,
+        errorCode: 'TYPE_MISMATCH',
       });
       return;
     }
@@ -214,13 +250,11 @@ router.post('/execute', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Build transaction for client-side signing
-    // Note: For security, we don't accept private keys over the network
-    // The agent must sign the transaction client-side
+    // Build transaction for client-side signing using pool's types
     const tx = swapService.buildSwapTransaction(
       request,
-      request.baseAssetType,
-      request.quoteAssetType
+      poolInfo.pool.baseAsset,
+      poolInfo.pool.quoteAsset
     );
     tx.setSender(request.agentAddress);
     const txBytes = await tx.build({ client: suiClient.getClient() });

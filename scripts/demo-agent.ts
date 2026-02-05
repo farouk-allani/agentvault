@@ -19,21 +19,51 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// ============================================================================
+// OFFICIAL DEEPBOOK V3 ADDRESSES (from @mysten/deepbook-v3 SDK)
+// ============================================================================
+const NETWORK = process.env.SUI_NETWORK || 'testnet';
+const IS_MAINNET = NETWORK === 'mainnet';
+
+// Testnet tokens
+const TESTNET = {
+  DEEP: '0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP',
+  SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+  DBUSDC: '0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDC::DBUSDC',
+  DEEP_SUI_POOL: '0x48c95963e9eac37a316b7ae04a0deb761bcdcc2b67912374d6036e7f0e9bae9f',
+  SUI_DBUSDC_POOL: '0x1c19362ca52b8ffd7a33cee805a67d40f31e6ba303753fd3a4cfdfacea7163a5',
+  DEEP_DBUSDC_POOL: '0xe86b991f8632217505fd859445f9803967ac84a9d4a1219065bf191fcb74b622',
+};
+
+// Mainnet tokens
+const MAINNET = {
+  DEEP: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+  SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+  USDC: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
+  DEEP_SUI_POOL: '0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22',
+  SUI_USDC_POOL: '0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407',
+  DEEP_USDC_POOL: '0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce',
+};
+
+const TOKENS = IS_MAINNET ? MAINNET : TESTNET;
+
 // Configuration
 const CONFIG = {
-  RPC_URL: process.env.SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443',
+  RPC_URL: process.env.SUI_RPC_URL || (IS_MAINNET 
+    ? 'https://fullnode.mainnet.sui.io:443' 
+    : 'https://fullnode.testnet.sui.io:443'),
   PACKAGE_ID: process.env.PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434',
   VAULT_ID: process.env.VAULT_ID || '',
   AGENT_PRIVATE_KEY: process.env.AGENT_PRIVATE_KEY || '',
-  // DeepBook v3 testnet pool (DEEP/SUI)
-  POOL_ID: process.env.POOL_ID || '0x0064034cf7f797e298bd9cd506f0e127ce511a798b3d9113e2f0cdb7e2c049f6',
+  // DeepBook v3 pool (DEEP/SUI) - using correct testnet/mainnet address
+  POOL_ID: process.env.POOL_ID || TOKENS.DEEP_SUI_POOL,
   DEEP_COIN_ID: process.env.DEEP_COIN_ID || '',
 };
 
 // Asset types
 const ASSET_TYPES = {
-  SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
-  DEEP: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+  SUI: TOKENS.SUI,
+  DEEP: TOKENS.DEEP,
 };
 
 interface VaultConstraints {

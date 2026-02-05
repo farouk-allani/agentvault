@@ -5,7 +5,10 @@
   "scripts": {
     "swap": "npx tsx swap-sui-for-deep.ts",
     "check-balance": "npx tsx check-balances.ts",
-    "agent-demo": "npx tsx demo-agent.ts"
+    "agent-demo": "npx tsx demo-agent.ts",
+    "demo-swap": "npx tsx demo-deepbook-swap.ts",
+    "print-addresses": "npx tsx print-deepbook-addresses.ts",
+    "get-dbusdc": "npx tsx get-dbusdc.ts"
   },
   "dependencies": {
     "@mysten/deepbook-v3": "^1.0.1",

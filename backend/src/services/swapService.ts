@@ -3,40 +3,87 @@ import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { env, getSuiRpcUrl } from '../config/index.js';
 
-// DeepBook v3 pool IDs
-// Testnet pools from: https://docs.sui.io/standards/deepbookv3/contract-information
-// These are the official DeepBook v3 testnet pool addresses
+// ============================================================================
+// DEEPBOOK V3 CONFIGURATION (from @mysten/deepbook-v3 SDK)
+// ============================================================================
+
+const IS_MAINNET = env.SUI_NETWORK === 'mainnet';
+
+// TESTNET Token Types
+const TESTNET_TOKENS = {
+  DEEP: '0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP',
+  SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+  DBUSDC: '0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDC::DBUSDC',
+};
+
+// TESTNET Pool Addresses
+const TESTNET_POOLS = {
+  DEEP_SUI: '0x48c95963e9eac37a316b7ae04a0deb761bcdcc2b67912374d6036e7f0e9bae9f',
+  SUI_DBUSDC: '0x1c19362ca52b8ffd7a33cee805a67d40f31e6ba303753fd3a4cfdfacea7163a5',
+  DEEP_DBUSDC: '0xe86b991f8632217505fd859445f9803967ac84a9d4a1219065bf191fcb74b622',
+};
+
+// MAINNET Token Types
+const MAINNET_TOKENS = {
+  DEEP: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+  SUI: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+  USDC: '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC',
+};
+
+// MAINNET Pool Addresses
+const MAINNET_POOLS = {
+  DEEP_SUI: '0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22',
+  SUI_USDC: '0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407',
+  DEEP_USDC: '0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce',
+};
+
+// Select based on network
+const TOKENS = IS_MAINNET ? MAINNET_TOKENS : TESTNET_TOKENS;
+const POOLS = IS_MAINNET ? MAINNET_POOLS : TESTNET_POOLS;
+
+// Asset type constants
+const DEEP_TYPE = TOKENS.DEEP;
+const SUI_TYPE = TOKENS.SUI;
+// On testnet: DBUSDC, On mainnet: native USDC
+const QUOTE_STABLE_TYPE = IS_MAINNET ? MAINNET_TOKENS.USDC : TESTNET_TOKENS.DBUSDC;
+
+// DeepBook pools with correct addresses from the official SDK
 const DEEPBOOK_POOLS: Record<string, { id: string; baseAsset: string; quoteAsset: string; baseName: string; quoteName: string }> = {
   'DEEP_SUI': {
-    id: env.DEEPBOOK_DEEP_SUI_POOL || '0x0064034cf7f797e298bd9cd506f0e127ce511a798b3d9113e2f0cdb7e2c049f6',
-    baseAsset: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
-    quoteAsset: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
+    id: POOLS.DEEP_SUI || env.DEEPBOOK_DEEP_SUI_POOL,
+    baseAsset: DEEP_TYPE,
+    quoteAsset: SUI_TYPE,
     baseName: 'DEEP',
     quoteName: 'SUI',
   },
-  'SUI_USDC': {
-    id: env.DEEPBOOK_SUI_USDC_POOL || '0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407',
-    baseAsset: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
-    quoteAsset: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC',
+  'SUI_DBUSDC': {
+    id: (IS_MAINNET ? MAINNET_POOLS.SUI_USDC : TESTNET_POOLS.SUI_DBUSDC) || env.DEEPBOOK_SUI_USDC_POOL,
+    baseAsset: SUI_TYPE,
+    quoteAsset: QUOTE_STABLE_TYPE,
     baseName: 'SUI',
-    quoteName: 'USDC',
+    quoteName: IS_MAINNET ? 'USDC' : 'DBUSDC',
   },
-  'DEEP_USDC': {
-    id: env.DEEPBOOK_DEEP_USDC_POOL || '0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce',
-    baseAsset: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
-    quoteAsset: '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC',
+  'DEEP_DBUSDC': {
+    id: (IS_MAINNET ? MAINNET_POOLS.DEEP_USDC : TESTNET_POOLS.DEEP_DBUSDC) || env.DEEPBOOK_DEEP_USDC_POOL,
+    baseAsset: DEEP_TYPE,
+    quoteAsset: QUOTE_STABLE_TYPE,
     baseName: 'DEEP',
-    quoteName: 'USDC',
+    quoteName: IS_MAINNET ? 'USDC' : 'DBUSDC',
   },
 };
 
+// Also add mainnet pool aliases for convenience
+if (IS_MAINNET) {
+  DEEPBOOK_POOLS['SUI_USDC'] = DEEPBOOK_POOLS['SUI_DBUSDC'];
+  DEEPBOOK_POOLS['DEEP_USDC'] = DEEPBOOK_POOLS['DEEP_DBUSDC'];
+}
+
 // Type addresses for common assets
 const ASSET_TYPES = {
-  SUI: '0x2::sui::SUI',
-  USDC: env.USDC_TYPE,
-  // DEEP token type - mainnet address
-  // Testnet may differ; update via env variable if needed
-  DEEP: env.DEEP_TYPE || '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP',
+  SUI: SUI_TYPE,
+  DEEP: DEEP_TYPE,
+  USDC: QUOTE_STABLE_TYPE,
+  DBUSDC: TESTNET_TOKENS.DBUSDC,
 };
 
 export interface SwapRequest {

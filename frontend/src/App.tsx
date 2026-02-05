@@ -32,6 +32,7 @@ interface VaultData {
   owner: string;
   agent: string;
   balance: string;
+  assetType: string; // The coin type this vault holds (e.g., 0x2::sui::SUI)
   constraints: VaultConstraints;
   spentToday: string;
   totalSpent: string;
@@ -100,7 +101,22 @@ interface QuoteResult {
   pool: { baseName: string; quoteName: string } | null;
 }
 
-type TabType = 'dashboard' | 'swap' | 'create' | 'manage';
+type TabType = 'dashboard' | 'swap' | 'create' | 'manage' | 'pay';
+
+interface PaymentForm {
+  recipient: string;
+  amount: string;
+}
+
+interface PaymentValidation {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  willTriggerAlert: boolean;
+  remainingAfterPayment: string;
+  exceedsPerTx: boolean;
+  exceedsDaily: boolean;
+}
 
 interface UserCoin {
   objectId: string;
@@ -109,10 +125,15 @@ interface UserCoin {
   symbol: string;
 }
 
-// Known coin types on testnet - maps type to symbol
+// Known coin types on testnet - maps type to symbol and decimals
 const KNOWN_COINS: Record<string, { symbol: string; decimals: number }> = {
   '0x2::sui::SUI': { symbol: 'SUI', decimals: 9 },
-  '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP': { symbol: 'DEEP', decimals: 6 },
+  // DEEP token (testnet)
+  '0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP': { symbol: 'DEEP', decimals: 6 },
+  // DBUSDC - DeepBook's testnet stablecoin (THIS IS WHAT DEEPBOOK POOLS USE!)
+  '0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDC::DBUSDC': { symbol: 'DBUSDC', decimals: 6 },
+  // Other USDC variants (not used by DeepBook pools)
+  '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC': { symbol: 'USDC', decimals: 6 },
 };
 
 function getCoinSymbol(coinType: string): string {
@@ -152,10 +173,21 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<{ ok: bool
   }
 }
 
-function formatAmount(raw: string | number, decimals = 6): string {
-  const num = typeof raw === 'string' ? parseInt(raw, 10) : raw;
-  if (isNaN(num)) return '0.00';
-  return (num / Math.pow(10, decimals)).toFixed(2);
+function formatAmount(raw: string | number, decimals = 9): string {
+  try {
+    // Use BigInt for precision with large numbers
+    const rawBigInt = BigInt(typeof raw === 'string' ? raw : Math.floor(raw));
+    const divisor = BigInt(10 ** decimals);
+    const wholePart = rawBigInt / divisor;
+    const fractionalPart = rawBigInt % divisor;
+
+    // Format fractional part with leading zeros, then take first 2 digits
+    const fractionalStr = fractionalPart.toString().padStart(decimals, '0').slice(0, 2);
+
+    return `${wholePart}.${fractionalStr}`;
+  } catch {
+    return '0.00';
+  }
 }
 
 function parseAmount(human: string, decimals = 6): string {
@@ -167,6 +199,11 @@ function parseAmount(human: string, decimals = 6): string {
 function truncateAddress(addr: string): string {
   if (!addr || addr.length < 16) return addr;
   return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
+}
+
+// Normalize Sui type addresses for comparison (remove leading zeros after 0x)
+function normalizeType(t: string): string {
+  return t.replace(/^0x0+/, '0x');
 }
 
 function explorerUrl(type: 'object' | 'txblock', id: string): string {
@@ -251,6 +288,17 @@ export default function App() {
   const [depositForm, setDepositForm] = useState({ coinObjectId: '' });
   const [withdrawForm, setWithdrawForm] = useState({ amount: '' });
 
+  // Payment state
+  const [paymentForm, setPaymentForm] = useState<PaymentForm>({ recipient: '', amount: '' });
+  const [paymentValidation, setPaymentValidation] = useState<PaymentValidation | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<Array<{
+    digest: string;
+    amount: string;
+    recipient: string;
+    status: 'success' | 'rejected' | 'alert';
+    timestamp: number;
+  }>>([]);
+
   // Transaction history
   const [txHistory, setTxHistory] = useState<Array<{ digest: string; type: string; amount: string; timestamp: number }>>([]);
 
@@ -332,6 +380,16 @@ export default function App() {
   useEffect(() => {
     fetchUserCoins();
   }, [fetchUserCoins]);
+
+  // Auto-select first DEEP coin for swap fees when coins are loaded
+  useEffect(() => {
+    if (userCoins.length > 0 && !swapForm.deepCoinId) {
+      const deepCoin = userCoins.find((c) => c.symbol === 'DEEP');
+      if (deepCoin) {
+        setSwapForm((f) => ({ ...f, deepCoinId: deepCoin.objectId }));
+      }
+    }
+  }, [userCoins, swapForm.deepCoinId]);
 
   // ============================================================================
   // API CALLS
@@ -500,6 +558,13 @@ export default function App() {
       return;
     }
 
+    // Find the selected coin to get its type
+    const selectedCoin = userCoins.find((c) => c.objectId === createForm.coinObjectId);
+    if (!selectedCoin) {
+      notify('Selected coin not found. Please refresh and try again.', 'error');
+      return;
+    }
+
     try {
       const result = await fetchJson<{ transaction: string }>(`${API_BASE}/api/vault/create`, {
         method: 'POST',
@@ -513,6 +578,7 @@ export default function App() {
           yieldEnabled: intentResult.parsed.yieldEnabled || false,
           minBalance: intentResult.parsed.minBalance || 10_000_000,
           coinObjectId: createForm.coinObjectId,
+          assetType: selectedCoin.coinType, // Send the actual coin type to match the object
         }),
       });
 
@@ -544,7 +610,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [intentResult, account?.address, createForm, signAndExecute, notify, loadUserVaults]);
+  }, [intentResult, account?.address, createForm, userCoins, signAndExecute, notify, loadUserVaults]);
 
   const executeDeposit = useCallback(async () => {
     if (!vaultId || !account?.address || !depositForm.coinObjectId) {
@@ -623,6 +689,162 @@ export default function App() {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
   }, [vaultId, account?.address, withdrawForm, signAndExecute, notify, loadVaultStatus]);
+
+  // Validate payment against constraints in real-time
+  const validatePayment = useCallback((amount: string): PaymentValidation => {
+    const validation: PaymentValidation = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      willTriggerAlert: false,
+      remainingAfterPayment: '0',
+      exceedsPerTx: false,
+      exceedsDaily: false,
+    };
+
+    if (!vault || !status?.status) {
+      validation.isValid = false;
+      validation.errors.push('No vault loaded');
+      return validation;
+    }
+
+    const amountNum = parseFloat(amount || '0');
+    if (isNaN(amountNum) || amountNum <= 0) {
+      validation.isValid = false;
+      validation.errors.push('Enter a valid amount');
+      return validation;
+    }
+
+    const amountMist = BigInt(parseAmount(amount));
+    const perTxLimit = BigInt(vault.constraints.perTxLimit);
+    const dailyLimit = BigInt(vault.constraints.dailyLimit);
+    const spentToday = BigInt(vault.spentToday);
+    const remainingDaily = dailyLimit - spentToday;
+    const alertThreshold = BigInt(vault.constraints.alertThreshold);
+    const balance = BigInt(vault.balance);
+
+    // Check per-transaction limit
+    if (amountMist > perTxLimit) {
+      validation.isValid = false;
+      validation.exceedsPerTx = true;
+      validation.errors.push(`Exceeds per-transaction limit (${formatAmount(vault.constraints.perTxLimit)})`);
+    }
+
+    // Check daily remaining
+    if (amountMist > remainingDaily) {
+      validation.isValid = false;
+      validation.exceedsDaily = true;
+      validation.errors.push(`Exceeds remaining daily limit (${formatAmount(remainingDaily.toString())})`);
+    }
+
+    // Check balance
+    if (amountMist > balance) {
+      validation.isValid = false;
+      validation.errors.push(`Insufficient balance (${formatAmount(vault.balance)})`);
+    }
+
+    // Check if it will trigger alert
+    if (amountMist >= alertThreshold) {
+      validation.willTriggerAlert = true;
+      validation.warnings.push(`Will trigger alert (threshold: ${formatAmount(vault.constraints.alertThreshold)})`);
+    }
+
+    // Calculate remaining after payment
+    const remainingAfter = remainingDaily - amountMist;
+    validation.remainingAfterPayment = remainingAfter > 0n ? formatAmount(remainingAfter.toString()) : '0';
+
+    return validation;
+  }, [vault, status]);
+
+  // Update validation when payment form changes
+  useEffect(() => {
+    if (paymentForm.amount) {
+      const validation = validatePayment(paymentForm.amount);
+      setPaymentValidation(validation);
+    } else {
+      setPaymentValidation(null);
+    }
+  }, [paymentForm.amount, validatePayment]);
+
+  // Execute payment transaction
+  const executePayment = useCallback(async () => {
+    if (!vaultId || !account?.address || !paymentForm.recipient || !paymentForm.amount) {
+      notify('Fill in all payment details', 'error');
+      return;
+    }
+
+    const validation = validatePayment(paymentForm.amount);
+    if (!validation.isValid) {
+      notify(`Payment rejected: ${validation.errors[0]}`, 'error');
+      setPaymentHistory((prev) => [{
+        digest: 'rejected',
+        amount: paymentForm.amount,
+        recipient: paymentForm.recipient,
+        status: 'rejected',
+        timestamp: Date.now(),
+      }, ...prev.slice(0, 9)]);
+      return;
+    }
+
+    try {
+      const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434';
+      const assetType = vault?.assetType || '0x2::sui::SUI';
+      const amountMist = parseAmount(paymentForm.amount);
+
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::vault::execute_payment`,
+        typeArguments: [assetType],
+        arguments: [
+          tx.object(vaultId),
+          tx.pure.address(paymentForm.recipient),
+          tx.pure.u64(BigInt(amountMist)),
+          tx.object('0x6'), // Clock object
+        ],
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (txResult) => {
+            const statusType = validation.willTriggerAlert ? 'alert' : 'success';
+            const msg = validation.willTriggerAlert 
+              ? `⚠️ Payment sent with ALERT! TX: ${txResult.digest.slice(0, 16)}...`
+              : `✓ Payment successful! TX: ${txResult.digest.slice(0, 16)}...`;
+            notify(msg, statusType === 'alert' ? 'info' : 'success');
+            
+            setPaymentHistory((prev) => [{
+              digest: txResult.digest,
+              amount: paymentForm.amount,
+              recipient: paymentForm.recipient,
+              status: statusType as 'success' | 'alert',
+              timestamp: Date.now(),
+            }, ...prev.slice(0, 9)]);
+            
+            setTxHistory((prev) => [
+              { digest: txResult.digest, type: 'payment', amount: paymentForm.amount, timestamp: Date.now() },
+              ...prev.slice(0, 9),
+            ]);
+            
+            setPaymentForm({ recipient: '', amount: '' });
+            setTimeout(loadVaultStatus, 2000);
+          },
+          onError: (error) => {
+            notify(`Payment failed: ${error.message}`, 'error');
+            setPaymentHistory((prev) => [{
+              digest: 'failed',
+              amount: paymentForm.amount,
+              recipient: paymentForm.recipient,
+              status: 'rejected',
+              timestamp: Date.now(),
+            }, ...prev.slice(0, 9)]);
+          },
+        }
+      );
+    } catch (error) {
+      notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
+    }
+  }, [vaultId, account?.address, paymentForm, vault, signAndExecute, notify, loadVaultStatus, validatePayment]);
 
   // ============================================================================
   // EFFECTS
@@ -778,13 +1000,13 @@ export default function App() {
 
       {/* Navigation Tabs */}
       <nav className="tabs">
-        {(['dashboard', 'swap', 'create', 'manage'] as TabType[]).map((tab) => (
+        {(['dashboard', 'pay', 'swap', 'create', 'manage'] as TabType[]).map((tab) => (
           <button
             key={tab}
-            className={`tab ${activeTab === tab ? 'active' : ''}`}
+            className={`tab ${activeTab === tab ? 'active' : ''} ${tab === 'pay' ? 'tab-primary' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'pay' ? '💸 Pay' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </nav>
@@ -941,18 +1163,48 @@ export default function App() {
 
                   <label className="field">
                     DeepBook Pool
-                    <select
-                      value={swapForm.poolId}
-                      onChange={(e) => setSwapForm((f) => ({ ...f, poolId: e.target.value }))}
-                      className="select-input"
-                    >
-                      <option value="">Select a pool...</option>
-                      {availablePools.map((pool) => (
-                        <option key={pool.id} value={pool.id}>
-                          {pool.baseName}/{pool.quoteName} ({pool.pair})
-                        </option>
-                      ))}
-                    </select>
+                    {(() => {
+                      const compatiblePools = availablePools.filter((pool) => {
+                        if (!vault?.assetType) return true;
+                        return normalizeType(pool.quoteAsset) === normalizeType(vault.assetType);
+                      });
+
+                      if (vault?.assetType && compatiblePools.length === 0) {
+                        return (
+                          <div className="coin-empty">
+                            <div>
+                              <strong>No compatible pools</strong>
+                              <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                                Your vault uses: {getCoinSymbol(vault.assetType)} ({truncateAddress(vault.assetType)})
+                              </div>
+                              <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#666' }}>
+                                DeepBook pools support: SUI, DBUSDC (0xf7152c05...), DEEP
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <select
+                          value={swapForm.poolId}
+                          onChange={(e) => setSwapForm((f) => ({ ...f, poolId: e.target.value }))}
+                          className="select-input"
+                        >
+                          <option value="">Select a pool...</option>
+                          {compatiblePools.map((pool) => (
+                            <option key={pool.id} value={pool.id}>
+                              {pool.baseName}/{pool.quoteName} ({pool.pair})
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    })()}
+                    {vault?.assetType && availablePools.some((p) => normalizeType(p.quoteAsset) === normalizeType(vault.assetType)) && (
+                      <span className="field-hint">
+                        Showing pools compatible with your vault ({getCoinSymbol(vault.assetType)} vault)
+                      </span>
+                    )}
                   </label>
 
                   {quote && (
@@ -968,12 +1220,30 @@ export default function App() {
                   )}
 
                   <label className="field">
-                    DEEP Coin ID (for fees)
-                    <input
-                      value={swapForm.deepCoinId}
-                      onChange={(e) => setSwapForm((f) => ({ ...f, deepCoinId: e.target.value }))}
-                      placeholder="0x..."
-                    />
+                    DEEP Coin (for fees)
+                    {loadingCoins ? (
+                      <div className="coin-loading">Loading...</div>
+                    ) : (
+                      <select
+                        value={swapForm.deepCoinId}
+                        onChange={(e) => setSwapForm((f) => ({ ...f, deepCoinId: e.target.value }))}
+                        className="coin-select"
+                      >
+                        <option value="">-- Select DEEP coin --</option>
+                        {userCoins
+                          .filter((c) => c.symbol === 'DEEP')
+                          .map((coin) => (
+                            <option key={coin.objectId} value={coin.objectId}>
+                              DEEP - {formatAmount(coin.balance, getCoinDecimals(coin.coinType))} ({truncateAddress(coin.objectId)})
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                    <span className="field-hint">
+                      {userCoins.filter((c) => c.symbol === 'DEEP').length === 0
+                        ? 'No DEEP tokens found. Get DEEP from a faucet or swap.'
+                        : 'Required for DeepBook trading fees'}
+                    </span>
                   </label>
 
                   <div className="btn-group">
@@ -1032,6 +1302,18 @@ export default function App() {
                   <li>Must maintain minimum balance</li>
                   <li>Need DEEP tokens for DeepBook fees</li>
                 </ul>
+              </div>
+              <div className="info-block">
+                <h4>Supported Assets for Swaps</h4>
+                <ul>
+                  <li><strong>SUI</strong> - Native Sui token (0x2::sui::SUI)</li>
+                  <li><strong>DBUSDC</strong> - DeepBook testnet stablecoin (0xf7152c05...)</li>
+                  <li><strong>DEEP</strong> - DeepBook token (0x36dbef86...)</li>
+                </ul>
+                <p style={{ fontSize: '0.8rem', marginTop: '8px', color: '#666' }}>
+                  Create a vault with <strong>SUI</strong> or <strong>DBUSDC</strong> to use DeepBook swaps.
+                  Other USDC contracts are NOT compatible with DeepBook pools.
+                </p>
               </div>
             </div>
           </section>
@@ -1135,6 +1417,234 @@ export default function App() {
                   </button>
                 </>
               )}
+            </div>
+          </section>
+        )}
+
+        {/* ==================== PAY TAB ==================== */}
+        {activeTab === 'pay' && (
+          <section className="grid pay-section">
+            {/* Left Column - Payment Form */}
+            <div className="grid-card payment-card">
+              <div className="card-head">
+                <h2>💸 Execute Payment</h2>
+                <span className="card-badge">Agent Action</span>
+              </div>
+
+              {!account ? (
+                <div className="warning-banner">
+                  <p>Connect your wallet to execute payments</p>
+                  <ConnectButton />
+                </div>
+              ) : !vaultId ? (
+                <div className="warning-banner">
+                  <p>Select a vault first from the Dashboard tab</p>
+                  <button className="btn small" onClick={() => setActiveTab('dashboard')}>
+                    Go to Dashboard
+                  </button>
+                </div>
+              ) : !vault ? (
+                <div className="warning-banner">
+                  <p>Loading vault data...</p>
+                </div>
+              ) : account.address !== vault.agent ? (
+                <div className="warning-banner warning-agent">
+                  <p>⚠️ Only the vault's agent can execute payments</p>
+                  <p className="field-hint">Agent: {truncateAddress(vault.agent)}</p>
+                  <p className="field-hint">Your wallet: {truncateAddress(account.address)}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Constraint Status Display */}
+                  <div className="constraint-status">
+                    <div className="constraint-header">
+                      <span className="constraint-title">Spending Limits</span>
+                      <button className="btn-icon small" onClick={loadVaultStatus} disabled={loading.status}>
+                        {loading.status ? '...' : '↻'}
+                      </button>
+                    </div>
+                    <div className="constraint-grid">
+                      <div className="constraint-item">
+                        <span className="constraint-label">Per Transaction</span>
+                        <span className="constraint-value">{formatAmount(vault.constraints.perTxLimit)}</span>
+                      </div>
+                      <div className="constraint-item">
+                        <span className="constraint-label">Daily Limit</span>
+                        <span className="constraint-value">{formatAmount(vault.constraints.dailyLimit)}</span>
+                      </div>
+                      <div className="constraint-item">
+                        <span className="constraint-label">Spent Today</span>
+                        <span className="constraint-value spent">{formatAmount(vault.spentToday)}</span>
+                      </div>
+                      <div className="constraint-item">
+                        <span className="constraint-label">Remaining</span>
+                        <span className="constraint-value remaining" style={{ 
+                          color: BigInt(vault.constraints.dailyLimit) - BigInt(vault.spentToday) <= 0n ? '#ef4444' : '#22c55e' 
+                        }}>
+                          {formatAmount((BigInt(vault.constraints.dailyLimit) - BigInt(vault.spentToday)).toString())}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="constraint-bar">
+                      <div 
+                        className="constraint-bar-fill" 
+                        style={{ 
+                          width: `${Math.min(100, Number(BigInt(vault.spentToday) * 100n / BigInt(vault.constraints.dailyLimit || '1')))}%`,
+                          background: Number(BigInt(vault.spentToday) * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 90 ? '#ef4444' : 
+                                      Number(BigInt(vault.spentToday) * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 70 ? '#f59e0b' : '#22c55e'
+                        }} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Payment Form */}
+                  <div className="payment-form">
+                    <label className="field">
+                      <span className="field-label">Recipient Address</span>
+                      <input
+                        type="text"
+                        value={paymentForm.recipient}
+                        onChange={(e) => setPaymentForm((f) => ({ ...f, recipient: e.target.value }))}
+                        placeholder="0x..."
+                        className="input-address"
+                      />
+                    </label>
+
+                    <label className="field amount-field">
+                      <span className="field-label">Amount ({getCoinSymbol(vault.assetType)})</span>
+                      <div className="amount-input-wrapper">
+                        <input
+                          type="number"
+                          value={paymentForm.amount}
+                          onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))}
+                          placeholder="0.00"
+                          className={`input-amount ${paymentValidation?.isValid === false ? 'input-error' : paymentValidation?.willTriggerAlert ? 'input-warning' : ''}`}
+                          step="0.01"
+                        />
+                        <span className="amount-suffix">{getCoinSymbol(vault.assetType)}</span>
+                      </div>
+                    </label>
+
+                    {/* Quick Amount Buttons */}
+                    <div className="quick-amounts">
+                      {[0.01, 0.05, 0.1].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          className="quick-amount-btn"
+                          onClick={() => setPaymentForm((f) => ({ ...f, amount: amt.toString() }))}
+                        >
+                          {amt} {getCoinSymbol(vault.assetType)}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Real-time Validation Feedback */}
+                    {paymentValidation && (
+                      <div className={`validation-feedback ${paymentValidation.isValid ? 'valid' : 'invalid'} ${paymentValidation.willTriggerAlert ? 'alert' : ''}`}>
+                        {paymentValidation.errors.length > 0 && (
+                          <div className="validation-errors">
+                            {paymentValidation.errors.map((err, i) => (
+                              <div key={i} className="validation-item error">
+                                <span className="icon">✕</span> {err}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {paymentValidation.warnings.length > 0 && (
+                          <div className="validation-warnings">
+                            {paymentValidation.warnings.map((warn, i) => (
+                              <div key={i} className="validation-item warning">
+                                <span className="icon">⚠</span> {warn}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {paymentValidation.isValid && (
+                          <div className="validation-success">
+                            <div className="validation-item success">
+                              <span className="icon">✓</span> Payment within constraints
+                            </div>
+                            <div className="validation-detail">
+                              Remaining after: {paymentValidation.remainingAfterPayment}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Execute Button */}
+                    <button
+                      className={`btn primary execute-btn ${paymentValidation?.willTriggerAlert ? 'btn-warning' : ''}`}
+                      onClick={executePayment}
+                      disabled={isExecuting || !paymentForm.recipient || !paymentForm.amount || paymentValidation?.isValid === false}
+                    >
+                      {isExecuting ? (
+                        <span className="btn-loading">Executing...</span>
+                      ) : paymentValidation?.isValid === false ? (
+                        <span>❌ Payment Blocked</span>
+                      ) : paymentValidation?.willTriggerAlert ? (
+                        <span>⚠️ Send with Alert</span>
+                      ) : (
+                        <span>Send Payment</span>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Right Column - Info & History */}
+            <div className="grid-card">
+              <div className="card-head">
+                <h2>Payment History</h2>
+              </div>
+
+              {paymentHistory.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">💳</div>
+                  <p>No payments yet</p>
+                  <p className="field-hint">Execute a payment to see it here</p>
+                </div>
+              ) : (
+                <ul className="payment-history">
+                  {paymentHistory.map((payment, idx) => (
+                    <li key={idx} className={`payment-item ${payment.status}`}>
+                      <div className="payment-main">
+                        <span className={`payment-status-icon ${payment.status}`}>
+                          {payment.status === 'success' ? '✓' : payment.status === 'alert' ? '⚠' : '✕'}
+                        </span>
+                        <div className="payment-details">
+                          <span className="payment-amount">{payment.amount} {vault ? getCoinSymbol(vault.assetType) : 'SUI'}</span>
+                          <span className="payment-recipient">→ {truncateAddress(payment.recipient)}</span>
+                        </div>
+                      </div>
+                      <div className="payment-meta">
+                        <span className={`payment-badge ${payment.status}`}>
+                          {payment.status === 'success' ? 'Success' : payment.status === 'alert' ? 'Alert' : 'Rejected'}
+                        </span>
+                        {payment.digest !== 'rejected' && payment.digest !== 'failed' && (
+                          <a href={explorerUrl('txblock', payment.digest)} target="_blank" rel="noreferrer" className="link">
+                            View ↗
+                          </a>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="info-block" style={{ marginTop: '20px' }}>
+                <h4>How Constraints Work</h4>
+                <ul>
+                  <li><strong>Per-TX Limit:</strong> Max single payment</li>
+                  <li><strong>Daily Limit:</strong> Total spending per 24h</li>
+                  <li><strong>Alert Threshold:</strong> Triggers notification</li>
+                </ul>
+                <p style={{ fontSize: '0.8rem', marginTop: '12px', color: '#666' }}>
+                  Payments exceeding limits are <strong>rejected on-chain</strong>. No trust required.
+                </p>
+              </div>
             </div>
           </section>
         )}

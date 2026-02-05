@@ -9,7 +9,7 @@
  *   npx ts-node scripts/swap-sui-for-deep.ts
  */
 
-import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
+import { deepbook, testnetPools, mainnetPools, type DeepBookClient } from '@mysten/deepbook-v3';
 import type { ClientWithExtensions } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -21,19 +21,38 @@ import * as path from 'path';
 
 config();
 
-// DeepBook v3 Testnet Configuration
-const DEEP_TYPE = '0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP';
+// ============================================================================
+// OFFICIAL DEEPBOOK V3 ADDRESSES (from @mysten/deepbook-v3 SDK)
+// ============================================================================
+const NETWORK = (process.env.SUI_NETWORK as 'testnet' | 'mainnet') || 'testnet';
+const IS_MAINNET = NETWORK === 'mainnet';
+
+// Use the correct addresses from the SDK
+const DEEP_TYPE = IS_MAINNET 
+  ? '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP'
+  : '0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP';
+
 const SUI_TYPE = '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI';
+
+// Pool addresses from SDK
+const POOLS = IS_MAINNET ? mainnetPools : testnetPools;
+
+console.log(`\n🌐 Network: ${NETWORK.toUpperCase()}`);
+console.log(`📊 DEEP_SUI Pool: ${POOLS.DEEP_SUI.address}`);
 
 class DeepBookSwapper {
   client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
   keypair: Ed25519Keypair;
+  network: 'testnet' | 'mainnet';
 
   constructor(privateKey: string) {
+    this.network = NETWORK;
     this.keypair = this.getSignerFromPK(privateKey);
     this.client = new SuiGrpcClient({
-      network: 'testnet',
-      baseUrl: 'https://fullnode.testnet.sui.io:443',
+      network: this.network,
+      baseUrl: IS_MAINNET 
+        ? 'https://fullnode.mainnet.sui.io:443'
+        : 'https://fullnode.testnet.sui.io:443',
     }).$extend(
       deepbook({
         address: this.getActiveAddress(),

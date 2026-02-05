@@ -1107,3 +1107,431 @@ h1 {
   }
 }
 
+/* ============================================================================
+   PAYMENT TAB - HACKATHON DEMO STYLES
+============================================================================ */
+
+.pay-section {
+  gap: 24px;
+}
+
+.payment-card {
+  background: linear-gradient(135deg, #fff9f1 0%, #fff 100%);
+}
+
+.card-badge {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tab-primary {
+  background: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+.tab-primary.active {
+  background: var(--success) !important;
+  color: var(--ink) !important;
+}
+
+/* Constraint Status Display */
+.constraint-status {
+  background: #f8f8f8;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.constraint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.constraint-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.constraint-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.constraint-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.constraint-label {
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.constraint-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.constraint-value.spent {
+  color: var(--warning);
+}
+
+.constraint-value.remaining {
+  color: var(--success);
+}
+
+.constraint-bar {
+  height: 8px;
+  background: #e5e5e5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.constraint-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease, background 0.3s ease;
+  border-radius: 4px;
+}
+
+/* Payment Form */
+.payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.amount-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-amount {
+  width: 100%;
+  padding-right: 60px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.amount-suffix {
+  position: absolute;
+  right: 12px;
+  color: #666;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.input-error {
+  border-color: var(--error) !important;
+  background: #fef2f2;
+}
+
+.input-warning {
+  border-color: var(--warning) !important;
+  background: #fffbeb;
+}
+
+/* Quick Amount Buttons */
+.quick-amounts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-amount-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  background: #f0f0f0;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.quick-amount-btn:hover {
+  background: var(--ink);
+  color: var(--paper);
+  transform: translateY(-1px);
+}
+
+/* Validation Feedback */
+.validation-feedback {
+  padding: 12px;
+  border-radius: 8px;
+  border: 2px solid;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.validation-feedback.valid {
+  border-color: var(--success);
+  background: #f0fdf4;
+}
+
+.validation-feedback.invalid {
+  border-color: var(--error);
+  background: #fef2f2;
+}
+
+.validation-feedback.alert {
+  border-color: var(--warning);
+  background: #fffbeb;
+}
+
+.validation-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.validation-item .icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.7rem;
+}
+
+.validation-item.error .icon {
+  background: var(--error);
+  color: white;
+}
+
+.validation-item.warning .icon {
+  background: var(--warning);
+  color: white;
+}
+
+.validation-item.success .icon {
+  background: var(--success);
+  color: white;
+}
+
+.validation-detail {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 4px;
+  margin-left: 26px;
+}
+
+/* Execute Button */
+.execute-btn {
+  margin-top: 8px;
+  padding: 16px 24px;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.execute-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.execute-btn.btn-warning {
+  background: var(--warning);
+  border-color: var(--ink);
+}
+
+.execute-btn.btn-warning:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.btn-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Payment History */
+.payment-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.payment-item {
+  padding: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.15s ease;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.payment-item.success {
+  background: #f0fdf4;
+  border-color: var(--success);
+}
+
+.payment-item.alert {
+  background: #fffbeb;
+  border-color: var(--warning);
+}
+
+.payment-item.rejected {
+  background: #fef2f2;
+  border-color: var(--error);
+}
+
+.payment-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.payment-status-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.payment-status-icon.success {
+  background: var(--success);
+  color: white;
+}
+
+.payment-status-icon.alert {
+  background: var(--warning);
+  color: white;
+}
+
+.payment-status-icon.rejected {
+  background: var(--error);
+  color: white;
+}
+
+.payment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-amount {
+  font-weight: 700;
+  font-size: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.payment-recipient {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.payment-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.payment-badge {
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.payment-badge.success {
+  background: var(--success);
+  color: white;
+}
+
+.payment-badge.alert {
+  background: var(--warning);
+  color: white;
+}
+
+.payment-badge.rejected {
+  background: var(--error);
+  color: white;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+/* Warning Banners */
+.warning-agent {
+  border-left: 4px solid var(--warning);
+}
+
+/* Responsive adjustments for payment section */
+@media (max-width: 768px) {
+  .constraint-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quick-amounts {
+    justify-content: center;
+  }
+  
+  .payment-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .payment-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+

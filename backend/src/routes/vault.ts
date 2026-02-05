@@ -14,8 +14,8 @@ const router = Router();
 const createVaultSchema = z.object({
   owner: z.string().min(1, 'Owner address is required'),
   agent: z.string().min(1, 'Agent address is required'),
-  dailyLimit: z.number().min(1_000_000).max(1_000_000_000_000),
-  perTxLimit: z.number().min(1).max(1_000_000_000_000),
+  dailyLimit: z.number().min(1).max(1_000_000_000_000_000), // Allow any positive number
+  perTxLimit: z.number().min(1).max(1_000_000_000_000_000), // Allow any positive number
   alertThreshold: z.number().min(0),
   yieldEnabled: z.boolean(),
   minBalance: z.number().min(0),

@@ -36,6 +36,7 @@ export interface VaultData {
   owner: string;
   agent: string;
   balance: string;
+  assetType: string; // The coin type this vault holds (e.g., 0x2::sui::SUI)
   constraints: {
     dailyLimit: string;
     perTxLimit: string;
@@ -50,6 +51,14 @@ export interface VaultData {
   txCount: string;
   yieldPositionId: string | null;
   yieldEarned: string;
+}
+
+// Extract asset type from vault's Move type string
+// e.g., "0x...::vault::Vault<0x2::sui::SUI>" -> "0x2::sui::SUI"
+function extractAssetType(vaultType: string | null | undefined): string {
+  if (!vaultType) return '0x2::sui::SUI'; // Default to SUI
+  const match = vaultType.match(/<(.+)>$/);
+  return match ? match[1] : '0x2::sui::SUI';
 }
 
 class SuiClientService {
@@ -79,12 +88,14 @@ class SuiClientService {
 
       const fields = response.data.content.fields as Record<string, unknown>;
       const constraints = extractConstraints(fields.constraints);
+      const assetType = extractAssetType(response.data.type);
 
       return {
         id: vaultId,
         owner: fields.owner as string,
         agent: fields.agent as string,
         balance: extractBalanceValue(fields.balance),
+        assetType,
         constraints: {
           dailyLimit: constraints.daily_limit as string,
           perTxLimit: constraints.per_tx_limit as string,
@@ -108,45 +119,42 @@ class SuiClientService {
 
   async getVaultsByOwner(ownerAddress: string): Promise<VaultData[]> {
     try {
-      const response = await this.client.getOwnedObjects({
-        owner: ownerAddress,
-        filter: {
-          StructType: `${env.PACKAGE_ID}::vault::Vault`,
+      // Vaults are shared objects, so we need to query VaultCreated events
+      // to find vaults where the owner matches
+      const events = await this.client.queryEvents({
+        query: {
+          MoveEventType: `${env.PACKAGE_ID}::events::VaultCreated`,
         },
-        options: {
-          showContent: true,
-          showType: true,
-        },
+        limit: 50,
+        order: 'descending',
       });
 
       const vaults: VaultData[] = [];
-      for (const obj of response.data) {
-        if (obj.data?.content && obj.data.content.dataType === 'moveObject') {
-          const fields = obj.data.content.fields as Record<string, unknown>;
-          const constraints = extractConstraints(fields.constraints);
+      const seenVaults = new Set<string>();
 
-          vaults.push({
-            id: obj.data.objectId,
-            owner: fields.owner as string,
-            agent: fields.agent as string,
-            balance: extractBalanceValue(fields.balance),
-            constraints: {
-              dailyLimit: constraints.daily_limit as string,
-              perTxLimit: constraints.per_tx_limit as string,
-              alertThreshold: constraints.alert_threshold as string,
-              yieldEnabled: constraints.yield_enabled as boolean,
-              minBalance: constraints.min_balance as string,
-              paused: constraints.paused as boolean,
-            },
-            spentToday: fields.spent_today as string,
-            lastResetTimestamp: fields.last_reset_timestamp as string,
-            totalSpent: fields.total_spent as string,
-            txCount: fields.tx_count as string,
-            yieldPositionId: extractOptionValue(fields.yield_position_id),
-            yieldEarned: fields.yield_earned as string,
-          });
+      for (const event of events.data) {
+        const parsedJson = event.parsedJson as {
+          vault_id: string;
+          owner: string;
+          agent: string;
+          initial_balance: string;
+          daily_limit: string;
+          per_tx_limit: string;
+        };
+
+        // Filter by owner and skip duplicates
+        if (parsedJson.owner !== ownerAddress || seenVaults.has(parsedJson.vault_id)) {
+          continue;
+        }
+        seenVaults.add(parsedJson.vault_id);
+
+        // Fetch the full vault data to get current state
+        const vaultData = await this.getVault(parsedJson.vault_id);
+        if (vaultData) {
+          vaults.push(vaultData);
         }
       }
+
       return vaults;
     } catch (error) {
       console.error('Error fetching vaults by owner:', error);
