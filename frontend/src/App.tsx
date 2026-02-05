@@ -325,6 +325,17 @@ export default function App() {
   const [depositForm, setDepositForm] = useState({ coinObjectId: '', amount: '' });
   const [withdrawForm, setWithdrawForm] = useState({ amount: '' });
 
+  // Constraint editing state
+  const [isEditingConstraints, setIsEditingConstraints] = useState(false);
+  const [constraintForm, setConstraintForm] = useState({
+    dailyLimit: '',
+    perTxLimit: '',
+    alertThreshold: '',
+    minBalance: '',
+    yieldEnabled: false,
+  });
+  const [newAgentAddress, setNewAgentAddress] = useState('');
+
   // Payment state
   const [paymentForm, setPaymentForm] = useState<PaymentForm>({ recipient: '', amount: '' });
   const [paymentValidation, setPaymentValidation] = useState<PaymentValidation | null>(null);
@@ -898,6 +909,184 @@ export default function App() {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
   }, [vaultId, account?.address, paymentForm, vault, signAndExecute, notify, loadVault, validatePayment]);
+
+  // Initialize constraint form when vault loads
+  useEffect(() => {
+    if (vault && !isEditingConstraints) {
+      const decimals = getCoinDecimals(vault.assetType);
+      setConstraintForm({
+        dailyLimit: formatAmount(vault.constraints.dailyLimit, decimals),
+        perTxLimit: formatAmount(vault.constraints.perTxLimit, decimals),
+        alertThreshold: formatAmount(vault.constraints.alertThreshold, decimals),
+        minBalance: formatAmount(vault.constraints.minBalance, decimals),
+        yieldEnabled: vault.constraints.yieldEnabled,
+      });
+    }
+  }, [vault, isEditingConstraints]);
+
+  // Execute update constraints transaction
+  const executeUpdateConstraints = useCallback(async () => {
+    if (!vaultId || !account?.address || !vault) {
+      notify('Load vault first', 'error');
+      return;
+    }
+
+    if (account.address !== vault.owner) {
+      notify('Only the vault owner can update constraints', 'error');
+      return;
+    }
+
+    try {
+      const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434';
+      const assetType = vault.assetType;
+      const decimals = getCoinDecimals(assetType);
+
+      const dailyLimit = parseAmount(constraintForm.dailyLimit, decimals);
+      const perTxLimit = parseAmount(constraintForm.perTxLimit, decimals);
+      const alertThreshold = parseAmount(constraintForm.alertThreshold, decimals);
+      const minBalance = parseAmount(constraintForm.minBalance, decimals);
+
+      // Validation
+      if (BigInt(perTxLimit) > BigInt(dailyLimit)) {
+        notify('Per-transaction limit cannot exceed daily limit', 'error');
+        return;
+      }
+
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::vault::update_constraints`,
+        typeArguments: [assetType],
+        arguments: [
+          tx.object(vaultId),
+          tx.pure.u64(BigInt(dailyLimit)),
+          tx.pure.u64(BigInt(perTxLimit)),
+          tx.pure.u64(BigInt(alertThreshold)),
+          tx.pure.bool(constraintForm.yieldEnabled),
+          tx.pure.u64(BigInt(minBalance)),
+        ],
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (txResult) => {
+            notify(`Constraints updated! TX: ${txResult.digest.slice(0, 16)}...`, 'success');
+            setTxHistory((prev) => [
+              { digest: txResult.digest, type: 'update_constraints', amount: '', timestamp: Date.now() },
+              ...prev.slice(0, 9),
+            ]);
+            setIsEditingConstraints(false);
+            setTimeout(loadVault, 2000);
+          },
+          onError: (error) => {
+            notify(`Failed to update constraints: ${error.message}`, 'error');
+          },
+        }
+      );
+    } catch (error) {
+      notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
+    }
+  }, [vaultId, account?.address, vault, constraintForm, signAndExecute, notify, loadVault]);
+
+  // Execute pause/unpause transaction
+  const executeSetPaused = useCallback(async (paused: boolean) => {
+    if (!vaultId || !account?.address || !vault) {
+      notify('Load vault first', 'error');
+      return;
+    }
+
+    if (account.address !== vault.owner) {
+      notify('Only the vault owner can pause/unpause', 'error');
+      return;
+    }
+
+    try {
+      const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434';
+      const assetType = vault.assetType;
+
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::vault::set_paused`,
+        typeArguments: [assetType],
+        arguments: [
+          tx.object(vaultId),
+          tx.pure.bool(paused),
+        ],
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (txResult) => {
+            notify(`Vault ${paused ? 'paused' : 'unpaused'}! TX: ${txResult.digest.slice(0, 16)}...`, 'success');
+            setTxHistory((prev) => [
+              { digest: txResult.digest, type: paused ? 'pause' : 'unpause', amount: '', timestamp: Date.now() },
+              ...prev.slice(0, 9),
+            ]);
+            setTimeout(loadVault, 2000);
+          },
+          onError: (error) => {
+            notify(`Failed to ${paused ? 'pause' : 'unpause'} vault: ${error.message}`, 'error');
+          },
+        }
+      );
+    } catch (error) {
+      notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
+    }
+  }, [vaultId, account?.address, vault, signAndExecute, notify, loadVault]);
+
+  // Execute change agent transaction
+  const executeSetAgent = useCallback(async () => {
+    if (!vaultId || !account?.address || !vault) {
+      notify('Load vault first', 'error');
+      return;
+    }
+
+    if (account.address !== vault.owner) {
+      notify('Only the vault owner can change the agent', 'error');
+      return;
+    }
+
+    if (!newAgentAddress || !newAgentAddress.startsWith('0x')) {
+      notify('Enter a valid agent address', 'error');
+      return;
+    }
+
+    try {
+      const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434';
+      const assetType = vault.assetType;
+
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${PACKAGE_ID}::vault::set_agent`,
+        typeArguments: [assetType],
+        arguments: [
+          tx.object(vaultId),
+          tx.pure.address(newAgentAddress),
+        ],
+      });
+
+      signAndExecute(
+        { transaction: tx },
+        {
+          onSuccess: (txResult) => {
+            notify(`Agent updated! TX: ${txResult.digest.slice(0, 16)}...`, 'success');
+            setTxHistory((prev) => [
+              { digest: txResult.digest, type: 'set_agent', amount: '', timestamp: Date.now() },
+              ...prev.slice(0, 9),
+            ]);
+            setNewAgentAddress('');
+            setTimeout(loadVault, 2000);
+          },
+          onError: (error) => {
+            notify(`Failed to update agent: ${error.message}`, 'error');
+          },
+        }
+      );
+    } catch (error) {
+      notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
+    }
+  }, [vaultId, account?.address, vault, newAgentAddress, signAndExecute, notify, loadVault]);
 
   // ============================================================================
   // EFFECTS
@@ -1765,10 +1954,19 @@ export default function App() {
 
         {/* ==================== MANAGE TAB ==================== */}
         {activeTab === 'manage' && (
-          <section className="grid">
+          <section className="grid manage-section">
+            {/* Left Column - Constraint Controls */}
             <div className="grid-card">
               <div className="card-head">
-                <h2>Vault Controls</h2>
+                <h2>Vault Constraints</h2>
+                {vault && account?.address === vault.owner && (
+                  <button
+                    className={`btn small ${isEditingConstraints ? 'ghost' : ''}`}
+                    onClick={() => setIsEditingConstraints(!isEditingConstraints)}
+                  >
+                    {isEditingConstraints ? 'Cancel' : 'Edit'}
+                  </button>
+                )}
               </div>
 
               {!vault ? (
@@ -1778,10 +1976,108 @@ export default function App() {
                     Go to Dashboard
                   </button>
                 </div>
+              ) : !account ? (
+                <div className="warning-banner">
+                  <p>Connect wallet to manage constraints</p>
+                  <ConnectButton />
+                </div>
+              ) : account.address !== vault.owner ? (
+                <div className="warning-banner">
+                  <p>Only the vault owner can manage constraints</p>
+                  <p className="field-hint">Owner: {truncateAddress(vault.owner)}</p>
+                  <p className="field-hint">Your wallet: {truncateAddress(account.address)}</p>
+                </div>
+              ) : isEditingConstraints ? (
+                /* Editing Mode - Show Form */
+                <div className="constraint-edit-form">
+                  <div className="vault-token-info">
+                    {getTokenIcon(getCoinSymbol(vault.assetType)) && (
+                      <img
+                        src={getTokenIcon(getCoinSymbol(vault.assetType)) || ''}
+                        alt={getCoinSymbol(vault.assetType)}
+                        className="token-icon-medium"
+                      />
+                    )}
+                    <span className="vault-token-name">{getCoinSymbol(vault.assetType)} Vault</span>
+                  </div>
+
+                  <label className="field">
+                    <span className="field-label">Daily Limit ({getCoinSymbol(vault.assetType)})</span>
+                    <input
+                      type="number"
+                      value={constraintForm.dailyLimit}
+                      onChange={(e) => setConstraintForm((f) => ({ ...f, dailyLimit: e.target.value }))}
+                      placeholder="100.00"
+                      step="0.01"
+                    />
+                    <span className="field-hint">Maximum total spending per 24 hours</span>
+                  </label>
+
+                  <label className="field">
+                    <span className="field-label">Per-Transaction Limit ({getCoinSymbol(vault.assetType)})</span>
+                    <input
+                      type="number"
+                      value={constraintForm.perTxLimit}
+                      onChange={(e) => setConstraintForm((f) => ({ ...f, perTxLimit: e.target.value }))}
+                      placeholder="25.00"
+                      step="0.01"
+                    />
+                    <span className="field-hint">Maximum single transaction amount</span>
+                  </label>
+
+                  <label className="field">
+                    <span className="field-label">Alert Threshold ({getCoinSymbol(vault.assetType)})</span>
+                    <input
+                      type="number"
+                      value={constraintForm.alertThreshold}
+                      onChange={(e) => setConstraintForm((f) => ({ ...f, alertThreshold: e.target.value }))}
+                      placeholder="80.00"
+                      step="0.01"
+                    />
+                    <span className="field-hint">Triggers alert when daily spending reaches this amount</span>
+                  </label>
+
+                  <label className="field">
+                    <span className="field-label">Minimum Balance ({getCoinSymbol(vault.assetType)})</span>
+                    <input
+                      type="number"
+                      value={constraintForm.minBalance}
+                      onChange={(e) => setConstraintForm((f) => ({ ...f, minBalance: e.target.value }))}
+                      placeholder="10.00"
+                      step="0.01"
+                    />
+                    <span className="field-hint">Vault must retain at least this amount</span>
+                  </label>
+
+                  <label className="field checkbox">
+                    <input
+                      type="checkbox"
+                      checked={constraintForm.yieldEnabled}
+                      onChange={(e) => setConstraintForm((f) => ({ ...f, yieldEnabled: e.target.checked }))}
+                    />
+                    <span>Enable yield routing (future feature)</span>
+                  </label>
+
+                  <div className="btn-group">
+                    <button
+                      className="btn primary"
+                      onClick={executeUpdateConstraints}
+                      disabled={isExecuting}
+                    >
+                      {isExecuting ? 'Updating...' : 'Save Constraints'}
+                    </button>
+                    <button
+                      className="btn ghost"
+                      onClick={() => setIsEditingConstraints(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               ) : (
+                /* View Mode - Show Current Settings */
                 <>
                   <div className="control-section">
-                    <h4>Current Settings</h4>
                     <div className="vault-token-info">
                       {getTokenIcon(getCoinSymbol(vault.assetType)) && (
                         <img
@@ -1793,35 +2089,83 @@ export default function App() {
                       <span className="vault-token-name">{getCoinSymbol(vault.assetType)} Vault</span>
                     </div>
                     <div className="settings-grid">
-                      <div>
+                      <div className="setting-item">
                         <span className="meta-label">Daily Limit</span>
-                        <span>{formatAmount(vault.constraints.dailyLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
+                        <span className="setting-value">{formatAmount(vault.constraints.dailyLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
-                      <div>
+                      <div className="setting-item">
                         <span className="meta-label">Per-TX Limit</span>
-                        <span>{formatAmount(vault.constraints.perTxLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
+                        <span className="setting-value">{formatAmount(vault.constraints.perTxLimit, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
-                      <div>
+                      <div className="setting-item">
                         <span className="meta-label">Min Balance</span>
-                        <span>{formatAmount(vault.constraints.minBalance, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
+                        <span className="setting-value">{formatAmount(vault.constraints.minBalance, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
-                      <div>
+                      <div className="setting-item">
                         <span className="meta-label">Alert At</span>
-                        <span>{formatAmount(vault.constraints.alertThreshold, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
+                        <span className="setting-value">{formatAmount(vault.constraints.alertThreshold, getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="control-section">
-                    <h4>Status</h4>
-                    <div className={`status-badge ${vault.constraints.paused ? 'paused' : 'active'}`}>
-                      {vault.constraints.paused ? 'PAUSED' : 'ACTIVE'}
+                  {/* Pause/Unpause Control */}
+                  <div className="control-section pause-section">
+                    <div className="pause-header">
+                      <h4>Vault Status</h4>
+                      <div className={`status-badge large ${vault.constraints.paused ? 'paused' : 'active'}`}>
+                        {vault.constraints.paused ? 'PAUSED' : 'ACTIVE'}
+                      </div>
+                    </div>
+                    <p className="pause-description">
+                      {vault.constraints.paused
+                        ? 'Agent cannot execute any transactions while vault is paused.'
+                        : 'Agent can execute transactions within the defined constraints.'}
+                    </p>
+                    <button
+                      className={`btn ${vault.constraints.paused ? 'primary' : 'btn-danger'}`}
+                      onClick={() => executeSetPaused(!vault.constraints.paused)}
+                      disabled={isExecuting}
+                    >
+                      {isExecuting ? 'Processing...' : vault.constraints.paused ? 'Unpause Vault' : 'Pause Vault'}
+                    </button>
+                  </div>
+
+                  {/* Change Agent */}
+                  <div className="control-section agent-section">
+                    <h4>Agent Address</h4>
+                    <div className="current-agent">
+                      <span className="meta-label">Current Agent</span>
+                      <div className="agent-address">
+                        <span>{truncateAddress(vault.agent)}</span>
+                        <button className="btn-icon small" onClick={() => copyToClipboard(vault.agent)}>
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                    <div className="change-agent-form">
+                      <label className="field">
+                        <span className="field-label">New Agent Address</span>
+                        <input
+                          type="text"
+                          value={newAgentAddress}
+                          onChange={(e) => setNewAgentAddress(e.target.value)}
+                          placeholder="0x..."
+                        />
+                      </label>
+                      <button
+                        className="btn"
+                        onClick={executeSetAgent}
+                        disabled={isExecuting || !newAgentAddress}
+                      >
+                        {isExecuting ? 'Updating...' : 'Change Agent'}
+                      </button>
                     </div>
                   </div>
 
+                  {/* Quick Actions */}
                   <div className="control-section">
                     <h4>Quick Actions</h4>
-                    <div className="btn-group vertical">
+                    <div className="btn-group">
                       <button className="btn small" onClick={() => copyToClipboard(vaultId)}>
                         Copy Vault ID
                       </button>

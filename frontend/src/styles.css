@@ -1766,20 +1766,195 @@ h1 {
   .constraint-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .quick-amounts {
     justify-content: center;
   }
-  
+
   .payment-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .payment-meta {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+/* ============================================================================
+   MANAGE TAB - CONSTRAINT EDITING
+============================================================================ */
+
+.manage-section {
+  gap: 24px;
+}
+
+/* Constraint Edit Form */
+.constraint-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.constraint-edit-form .field {
+  margin-bottom: 12px;
+}
+
+.constraint-edit-form .field input[type="number"] {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+}
+
+/* Settings Grid (View Mode) */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.setting-item {
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.setting-value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 4px;
+}
+
+/* Pause Section */
+.pause-section {
+  background: #f9f9f9;
+  border: 2px solid #eee;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.pause-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.pause-header h4 {
+  margin: 0;
+}
+
+.pause-description {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.status-badge.large {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+}
+
+/* Danger Button */
+.btn-danger {
+  background: #fee2e2;
+  border-color: var(--error);
+  color: #991b1b;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--error);
+  color: white;
+}
+
+/* Agent Section */
+.agent-section {
+  border-top: 2px solid #eee;
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.agent-section h4 {
+  margin: 0 0 12px 0;
+}
+
+.current-agent {
+  margin-bottom: 16px;
+}
+
+.agent-address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.change-agent-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.change-agent-form .field {
+  margin-bottom: 0;
+}
+
+/* Control Section */
+.control-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #eee;
+}
+
+.control-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.control-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+}
+
+/* Small Button Icon */
+.btn-icon.small {
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
+}
+
+/* Responsive for Manage Section */
+@media (max-width: 768px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pause-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .agent-address {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
 
