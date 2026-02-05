@@ -132,8 +132,10 @@ const KNOWN_COINS: Record<string, { symbol: string; decimals: number }> = {
   '0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP': { symbol: 'DEEP', decimals: 6 },
   // DBUSDC - DeepBook's testnet stablecoin (THIS IS WHAT DEEPBOOK POOLS USE!)
   '0xf7152c05930480cd740d7311b5b8b45c6f488e3a53a11c3f74a6fac36a52e0d7::DBUSDC::DBUSDC': { symbol: 'DBUSDC', decimals: 6 },
-  // Other USDC variants (not used by DeepBook pools)
+  // Testnet USDC variants
   '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC': { symbol: 'USDC', decimals: 6 },
+  // Testnet USDC (used in vault transactions) - uses 9 decimals like SUI
+  '0xcdd397f2cffb7f5d439f56fc01afe5585c5f06e3bcd2ee3a21753c566de313d9::usdc::USDC': { symbol: 'USDC', decimals: 9 },
 };
 
 // Token icons mapping - using known sources
@@ -225,7 +227,7 @@ function formatAmount(raw: string | number, decimals = 9): string {
   }
 }
 
-function parseAmount(human: string, decimals = 6): string {
+function parseAmount(human: string, decimals = 9): string {
   const num = parseFloat(human);
   if (isNaN(num)) return '0';
   return Math.floor(num * Math.pow(10, decimals)).toString();
@@ -570,7 +572,7 @@ export default function App() {
             setSwapBuild(null);
             setSwapForm((prev) => ({ ...prev, amount: '', minOut: '' }));
             // Refresh vault status after short delay
-            setTimeout(loadVaultStatus, 2000);
+            setTimeout(loadVault, 2000);
           },
           onError: (error) => {
             notify(`Transaction failed: ${error.message}`, 'error');
@@ -580,7 +582,7 @@ export default function App() {
     } catch (error) {
       notify(`Failed to execute: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     }
-  }, [swapBuild, account?.address, swapForm.amount, signAndExecute, notify, loadVaultStatus]);
+  }, [swapBuild, account?.address, swapForm.amount, signAndExecute, notify, loadVault]);
 
   const executeCreateVault = useCallback(async () => {
     if (!intentResult?.parsed || !account?.address) {
@@ -684,7 +686,7 @@ export default function App() {
               ...prev.slice(0, 9),
             ]);
             setDepositForm({ coinObjectId: '', amount: '' });
-            setTimeout(loadVaultStatus, 2000);
+            setTimeout(loadVault, 2000);
           },
           onError: (error) => {
             notify(`Deposit failed: ${error.message}`, 'error');
@@ -694,7 +696,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, depositForm, vault, userCoins, signAndExecute, notify, loadVaultStatus]);
+  }, [vaultId, account?.address, depositForm, vault, userCoins, signAndExecute, notify, loadVault]);
 
   const executeWithdraw = useCallback(async () => {
     if (!vaultId || !account?.address || !withdrawForm.amount || !vault) {
@@ -727,7 +729,7 @@ export default function App() {
               ...prev.slice(0, 9),
             ]);
             setWithdrawForm({ amount: '' });
-            setTimeout(loadVaultStatus, 2000);
+            setTimeout(loadVault, 2000);
           },
           onError: (error) => {
             notify(`Withdrawal failed: ${error.message}`, 'error');
@@ -737,7 +739,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, withdrawForm, vault, signAndExecute, notify, loadVaultStatus]);
+  }, [vaultId, account?.address, withdrawForm, vault, signAndExecute, notify, loadVault]);
 
   // Validate payment against constraints in real-time
   const validatePayment = useCallback((amount: string): PaymentValidation => {
@@ -764,7 +766,8 @@ export default function App() {
       return validation;
     }
 
-    const amountMist = BigInt(parseAmount(amount));
+    const decimals = getCoinDecimals(vault.assetType);
+    const amountMist = BigInt(parseAmount(amount, decimals));
     const perTxLimit = BigInt(vault.constraints.perTxLimit);
     const dailyLimit = BigInt(vault.constraints.dailyLimit);
     const spentToday = BigInt(vault.spentToday);
@@ -776,31 +779,31 @@ export default function App() {
     if (amountMist > perTxLimit) {
       validation.isValid = false;
       validation.exceedsPerTx = true;
-      validation.errors.push(`Exceeds per-transaction limit (${formatAmount(vault.constraints.perTxLimit)})`);
+      validation.errors.push(`Exceeds per-transaction limit (${formatAmount(vault.constraints.perTxLimit, decimals)})`);
     }
 
     // Check daily remaining
     if (amountMist > remainingDaily) {
       validation.isValid = false;
       validation.exceedsDaily = true;
-      validation.errors.push(`Exceeds remaining daily limit (${formatAmount(remainingDaily.toString())})`);
+      validation.errors.push(`Exceeds remaining daily limit (${formatAmount(remainingDaily.toString(), decimals)})`);
     }
 
     // Check balance
     if (amountMist > balance) {
       validation.isValid = false;
-      validation.errors.push(`Insufficient balance (${formatAmount(vault.balance)})`);
+      validation.errors.push(`Insufficient balance (${formatAmount(vault.balance, decimals)})`);
     }
 
     // Check if it will trigger alert
     if (amountMist >= alertThreshold) {
       validation.willTriggerAlert = true;
-      validation.warnings.push(`Will trigger alert (threshold: ${formatAmount(vault.constraints.alertThreshold)})`);
+      validation.warnings.push(`Will trigger alert (threshold: ${formatAmount(vault.constraints.alertThreshold, decimals)})`);
     }
 
     // Calculate remaining after payment
     const remainingAfter = remainingDaily - amountMist;
-    validation.remainingAfterPayment = remainingAfter > 0n ? formatAmount(remainingAfter.toString()) : '0';
+    validation.remainingAfterPayment = remainingAfter > 0n ? formatAmount(remainingAfter.toString(), decimals) : '0';
 
     return validation;
   }, [vault, status]);
@@ -838,7 +841,8 @@ export default function App() {
     try {
       const PACKAGE_ID = import.meta.env.VITE_PACKAGE_ID || '0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434';
       const assetType = vault?.assetType || '0x2::sui::SUI';
-      const amountMist = parseAmount(paymentForm.amount);
+      const decimals = getCoinDecimals(assetType);
+      const amountMist = parseAmount(paymentForm.amount, decimals);
 
       const tx = new Transaction();
       tx.moveCall({
@@ -876,7 +880,7 @@ export default function App() {
             ]);
             
             setPaymentForm({ recipient: '', amount: '' });
-            setTimeout(loadVaultStatus, 2000);
+            setTimeout(loadVault, 2000);
           },
           onError: (error) => {
             notify(`Payment failed: ${error.message}`, 'error');
@@ -893,7 +897,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, paymentForm, vault, signAndExecute, notify, loadVaultStatus, validatePayment]);
+  }, [vaultId, account?.address, paymentForm, vault, signAndExecute, notify, loadVault, validatePayment]);
 
   // ============================================================================
   // EFFECTS
@@ -911,12 +915,12 @@ export default function App() {
     }
   }, [vaultId, loadVault]);
 
-  // Auto-refresh vault status
+  // Auto-refresh vault data
   useEffect(() => {
     if (!vaultId) return;
-    const interval = setInterval(loadVaultStatus, 15000);
+    const interval = setInterval(loadVault, 15000);
     return () => clearInterval(interval);
-  }, [vaultId, loadVaultStatus]);
+  }, [vaultId, loadVault]);
 
   // Load available pools on mount
   useEffect(() => {
@@ -1004,8 +1008,8 @@ export default function App() {
           <div className="hero-panel">
             <div className="panel-header">
               <span>Vault Status</span>
-              <button className="btn-icon" onClick={loadVaultStatus} disabled={loading.status}>
-                {loading.status ? '...' : '↻'}
+              <button className="btn-icon" onClick={loadVault} disabled={loading.vault}>
+                {loading.vault ? '...' : '↻'}
               </button>
             </div>
             <div className="panel-row">
@@ -1569,8 +1573,8 @@ export default function App() {
                         )}
                         <span className="constraint-title">Spending Limits ({getCoinSymbol(vault.assetType)})</span>
                       </div>
-                      <button className="btn-icon small" onClick={loadVaultStatus} disabled={loading.status}>
-                        {loading.status ? '...' : '↻'}
+                      <button className="btn-icon small" onClick={loadVault} disabled={loading.vault}>
+                        {loading.vault ? '...' : '↻'}
                       </button>
                     </div>
                     <div className="constraint-grid">
@@ -1676,7 +1680,7 @@ export default function App() {
                               <span className="icon">✓</span> Payment within constraints
                             </div>
                             <div className="validation-detail">
-                              Remaining after: {paymentValidation.remainingAfterPayment}
+                              Remaining after: {paymentValidation.remainingAfterPayment} {getCoinSymbol(vault.assetType)}
                             </div>
                           </div>
                         )}
@@ -1860,8 +1864,8 @@ export default function App() {
                   <div className="vault-balance-card">
                     <div className="vault-balance-header">
                       <span className="meta-label">Vault Balance</span>
-                      <button className="btn-icon small" onClick={loadVaultStatus} disabled={loading.status}>
-                        {loading.status ? '...' : '↻'}
+                      <button className="btn-icon small" onClick={loadVault} disabled={loading.vault}>
+                        {loading.vault ? '...' : '↻'}
                       </button>
                     </div>
                     <div className="vault-balance-display">
