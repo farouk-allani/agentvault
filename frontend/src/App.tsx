@@ -180,37 +180,14 @@ function getCoinSymbol(coinType: string): string {
 }
 
 function getCoinDecimals(coinType: string): number {
-  // Check exact match first
+  // Check exact match first - only trust known addresses
   if (KNOWN_COINS[coinType]) {
     return KNOWN_COINS[coinType].decimals;
   }
 
-  // Smart detection by symbol name for unknown coin addresses
-  // Extract the symbol from the type path (e.g., 0x...::usdc::USDC -> USDC)
-  const parts = coinType.split('::');
-  if (parts.length >= 3) {
-    const symbol = parts[parts.length - 1].toUpperCase();
-
-    // Stablecoins and common tokens with 6 decimals
-    if (
-      symbol.includes('USDC') ||
-      symbol.includes('USDT') ||
-      symbol.includes('DAI') ||
-      symbol.includes('BUSD') ||
-      symbol === 'DEEP' ||
-      symbol === 'DBUSDC'
-    ) {
-      return 6;
-    }
-
-    // ETH variants typically have 8 decimals on some chains, but 18 on others
-    // For Sui wrapped ETH, it's usually 8
-    if (symbol.includes('ETH') || symbol.includes('WETH')) {
-      return 8;
-    }
-  }
-
-  // Default to 9 decimals (SUI standard) for native SUI and unknown tokens
+  // IMPORTANT: On Sui testnet, many tokens (including some USDC variants) use 9 decimals
+  // like native SUI. Don't assume based on symbol name - only trust exact address matches.
+  // Default to 9 decimals (SUI standard) for any unknown token.
   return 9;
 }
 

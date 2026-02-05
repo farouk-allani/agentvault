@@ -71,12 +71,14 @@ const YIELD_PATTERNS = {
 
 /**
  * Parse a number string, handling commas and optional decimals
+ * Note: On Sui testnet, most tokens (including many USDC variants) use 9 decimals like native SUI.
+ * This is different from mainnet USDC which typically uses 6 decimals.
  */
-function parseAmount(amountStr: string): number {
+function parseAmount(amountStr: string, decimals: number = 9): number {
   const cleaned = amountStr.replace(/,/g, '');
   const parsed = parseFloat(cleaned);
-  // Convert to base units (assuming 6 decimals for USDC-like tokens)
-  return Math.floor(parsed * 1_000_000);
+  // Convert to base units using specified decimals (default 9 for Sui testnet)
+  return Math.floor(parsed * Math.pow(10, decimals));
 }
 
 /**
@@ -188,22 +190,24 @@ export function parseIntent(text: string): ParsedIntent {
 
 /**
  * Validate parsed intent against minimum requirements
+ * Uses 9 decimals to match Sui testnet token precision
  */
-export function validateIntent(intent: ParsedIntent): {
+export function validateIntent(intent: ParsedIntent, decimals: number = 9): {
   valid: boolean;
   errors: string[];
 } {
   const errors: string[] = [];
+  const oneUnit = Math.pow(10, decimals); // 1 token in base units
 
   if (intent.dailyLimit === undefined) {
     errors.push('Could not determine daily limit from intent');
   } else {
-    // Check minimum daily limit ($1 = 1_000_000 in 6 decimal units)
-    if (intent.dailyLimit < 1_000_000) {
+    // Check minimum daily limit ($1)
+    if (intent.dailyLimit < oneUnit) {
       errors.push('Daily limit must be at least $1');
     }
     // Check maximum daily limit ($1M)
-    if (intent.dailyLimit > 1_000_000_000_000) {
+    if (intent.dailyLimit > oneUnit * 1_000_000) {
       errors.push('Daily limit cannot exceed $1,000,000');
     }
   }
@@ -222,32 +226,34 @@ export function validateIntent(intent: ParsedIntent): {
 
 /**
  * Format a parsed intent back to human-readable form for confirmation
+ * Uses 9 decimals to match Sui testnet token precision
  */
-export function formatIntent(intent: ParsedIntent): string {
+export function formatIntent(intent: ParsedIntent, decimals: number = 9): string {
   const parts: string[] = [];
+  const divisor = Math.pow(10, decimals);
 
   if (intent.action) {
     parts.push(`Action: ${intent.action}`);
   }
 
   if (intent.dailyLimit !== undefined) {
-    const dollarAmount = intent.dailyLimit / 1_000_000;
-    parts.push(`Daily limit: $${dollarAmount.toFixed(2)}`);
+    const amount = intent.dailyLimit / divisor;
+    parts.push(`Daily limit: $${amount.toFixed(2)}`);
   }
 
   if (intent.perTxLimit !== undefined) {
-    const dollarAmount = intent.perTxLimit / 1_000_000;
-    parts.push(`Per-transaction limit: $${dollarAmount.toFixed(2)}`);
+    const amount = intent.perTxLimit / divisor;
+    parts.push(`Per-transaction limit: $${amount.toFixed(2)}`);
   }
 
   if (intent.alertThreshold !== undefined) {
-    const dollarAmount = intent.alertThreshold / 1_000_000;
-    parts.push(`Alert threshold: $${dollarAmount.toFixed(2)}`);
+    const amount = intent.alertThreshold / divisor;
+    parts.push(`Alert threshold: $${amount.toFixed(2)}`);
   }
 
   if (intent.minBalance !== undefined) {
-    const dollarAmount = intent.minBalance / 1_000_000;
-    parts.push(`Minimum balance: $${dollarAmount.toFixed(2)}`);
+    const amount = intent.minBalance / divisor;
+    parts.push(`Minimum balance: $${amount.toFixed(2)}`);
   }
 
   if (intent.yieldEnabled !== undefined) {
