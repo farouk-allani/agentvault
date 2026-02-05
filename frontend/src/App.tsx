@@ -962,7 +962,7 @@ export default function App() {
     if (!stats) return '#0e0e10';
     if (stats.usage >= 90) return '#ef4444';
     if (stats.usage >= 70) return '#f59e0b';
-    return '#22c55e';
+    return '#84cc16';
   }, [stats]);
 
   // ============================================================================
@@ -1593,7 +1593,7 @@ export default function App() {
                       <div className="constraint-item">
                         <span className="constraint-label">Remaining</span>
                         <span className="constraint-value remaining" style={{
-                          color: BigInt(vault.constraints.dailyLimit || '0') - BigInt(vault.spentToday || '0') <= 0n ? '#ef4444' : '#22c55e'
+                          color: BigInt(vault.constraints.dailyLimit || '0') - BigInt(vault.spentToday || '0') <= 0n ? '#ef4444' : '#84cc16'
                         }}>
                           {formatAmount((BigInt(vault.constraints.dailyLimit || '0') - BigInt(vault.spentToday || '0')).toString(), getCoinDecimals(vault.assetType))} {getCoinSymbol(vault.assetType)}
                         </span>
@@ -1605,7 +1605,7 @@ export default function App() {
                         style={{
                           width: `${Math.min(100, Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')))}%`,
                           background: Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 90 ? '#ef4444' :
-                                      Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 70 ? '#f59e0b' : '#22c55e'
+                                      Number(BigInt(vault.spentToday || '0') * 100n / BigInt(vault.constraints.dailyLimit || '1')) >= 70 ? '#f59e0b' : '#84cc16'
                         }}
                       />
                     </div>
