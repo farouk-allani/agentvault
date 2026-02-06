@@ -6,6 +6,14 @@ import {
   useSuiClient,
 } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
+import { useENSResolution, useENSConstraintProfile } from './hooks/useENS';
+import {
+  DEMO_CONSTRAINT_PROFILES,
+  isValidENSName,
+  isValidAddress,
+  formatAddress,
+  type ENSConstraintProfile,
+} from './services/ensService';
 
 // ============================================================================
 // CONFIGURATION
@@ -13,6 +21,10 @@ import { Transaction } from '@mysten/sui/transactions';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 const EXPLORER_BASE = 'https://suiexplorer.com';
+
+// Logos
+const SUI_LOGO = 'https://assets.coingecko.com/coins/images/26375/standard/sui_asset.jpeg';
+const ENS_LOGO = 'https://avatars.githubusercontent.com/u/34167658?s=280&v=4';
 
 // ============================================================================
 // TYPES
@@ -256,21 +268,25 @@ const featureCards = [
     title: 'Constrained Spending',
     text: 'Set daily limits, per-tx caps, and minimum balances. Agents operate within hard on-chain limits.',
     color: '#FD5A46',
+    icon: null,
   },
   {
     title: 'DeepBook v3 Swaps',
     text: 'Trade on Sui\'s native CLOB. Slippage protection built-in. No AccountCap needed.',
     color: '#C084FC',
+    icon: "https://img.cryptorank.io/coins/sui1750268474192.png",
   },
   {
-    title: 'Intent to Constraints',
-    text: '"Spend $100/day max" becomes enforceable smart contract parameters.',
-    color: '#84CC16',
+    title: 'ENS Profiles',
+    text: 'Load constraint presets from ENS. Pay to human-readable names. DeFi config stored on-chain.',
+    color: '#5298FF',
+    icon: "https://ens.domains/assets/ens_logo_white.svg",
   },
   {
     title: 'Real Autonomy',
     text: 'Shared objects let agents act without owner signatures. Trust the code, not the agent.',
-    color: '#F59E0B',
+    color: '#84CC16',
+    icon: null,
   },
 ];
 
@@ -349,6 +365,22 @@ export default function App() {
 
   // Transaction history
   const [txHistory, setTxHistory] = useState<Array<{ digest: string; type: string; amount: string; timestamp: number }>>([]);
+
+  // ============================================================================
+  // ENS INTEGRATION STATE
+  // ============================================================================
+
+  // ENS resolution for agent address (Create Vault & Change Agent)
+  const agentENSResolution = useENSResolution(createForm.agentAddress, { debounceMs: 600 });
+  const newAgentENSResolution = useENSResolution(newAgentAddress, { debounceMs: 600 });
+
+  // ENS resolution for payment recipient
+  const recipientENSResolution = useENSResolution(paymentForm.recipient, { debounceMs: 600 });
+
+  // ENS Constraint Profile loading
+  const ensConstraintProfile = useENSConstraintProfile();
+  const [selectedProfileKey, setSelectedProfileKey] = useState<string>('');
+  const [customProfileENS, setCustomProfileENS] = useState('');
 
   // ============================================================================
   // HELPER FUNCTIONS
@@ -606,6 +638,16 @@ export default function App() {
       return;
     }
 
+    // Use ENS-resolved address if available
+    const agentAddress = agentENSResolution.result?.success && agentENSResolution.result.address
+      ? agentENSResolution.result.address
+      : createForm.agentAddress;
+
+    if (!isValidAddress(agentAddress)) {
+      notify('Enter a valid agent address or ENS name', 'error');
+      return;
+    }
+
     // Find the selected coin to get its type
     const selectedCoin = userCoins.find((c) => c.objectId === createForm.coinObjectId);
     if (!selectedCoin) {
@@ -619,7 +661,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           owner: account.address,
-          agent: createForm.agentAddress,
+          agent: agentAddress, // Use resolved ENS address
           dailyLimit: intentResult.parsed.dailyLimit || 100_000_000,
           perTxLimit: intentResult.parsed.perTxLimit || 25_000_000,
           alertThreshold: intentResult.parsed.alertThreshold || 80_000_000,
@@ -658,7 +700,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [intentResult, account?.address, createForm, userCoins, signAndExecute, notify, loadUserVaults]);
+  }, [intentResult, account?.address, createForm, userCoins, signAndExecute, notify, loadUserVaults, agentENSResolution.result]);
 
   const executeDeposit = useCallback(async () => {
     if (!vaultId || !account?.address || !depositForm.coinObjectId || !vault) {
@@ -836,13 +878,24 @@ export default function App() {
       return;
     }
 
+    // Use ENS-resolved address if available, otherwise use raw input
+    const recipientAddress = recipientENSResolution.result?.success && recipientENSResolution.result.address
+      ? recipientENSResolution.result.address
+      : paymentForm.recipient;
+
+    // Validate that we have a valid address
+    if (!isValidAddress(recipientAddress)) {
+      notify('Invalid recipient address. Please use a valid address or ENS name.', 'error');
+      return;
+    }
+
     const validation = validatePayment(paymentForm.amount);
     if (!validation.isValid) {
       notify(`Payment rejected: ${validation.errors[0]}`, 'error');
       setPaymentHistory((prev) => [{
         digest: 'rejected',
         amount: paymentForm.amount,
-        recipient: paymentForm.recipient,
+        recipient: recipientENSResolution.result?.ensName || paymentForm.recipient,
         status: 'rejected',
         timestamp: Date.now(),
       }, ...prev.slice(0, 9)]);
@@ -861,7 +914,7 @@ export default function App() {
         typeArguments: [assetType],
         arguments: [
           tx.object(vaultId),
-          tx.pure.address(paymentForm.recipient),
+          tx.pure.address(recipientAddress), // Use resolved ENS address
           tx.pure.u64(BigInt(amountMist)),
           tx.object('0x6'), // Clock object
         ],
@@ -877,28 +930,32 @@ export default function App() {
               : `✓ Payment successful! TX: ${txResult.digest.slice(0, 16)}...`;
             notify(msg, statusType === 'alert' ? 'info' : 'success');
             
+            // Show ENS name in history if available
+            const displayRecipient = recipientENSResolution.result?.ensName || paymentForm.recipient;
+
             setPaymentHistory((prev) => [{
               digest: txResult.digest,
               amount: paymentForm.amount,
-              recipient: paymentForm.recipient,
+              recipient: displayRecipient,
               status: statusType as 'success' | 'alert',
               timestamp: Date.now(),
             }, ...prev.slice(0, 9)]);
-            
+
             setTxHistory((prev) => [
               { digest: txResult.digest, type: 'payment', amount: paymentForm.amount, timestamp: Date.now() },
               ...prev.slice(0, 9),
             ]);
-            
+
             setPaymentForm({ recipient: '', amount: '' });
             setTimeout(loadVault, 2000);
           },
           onError: (error) => {
             notify(`Payment failed: ${error.message}`, 'error');
+            const displayRecipient = recipientENSResolution.result?.ensName || paymentForm.recipient;
             setPaymentHistory((prev) => [{
               digest: 'failed',
               amount: paymentForm.amount,
-              recipient: paymentForm.recipient,
+              recipient: displayRecipient,
               status: 'rejected',
               timestamp: Date.now(),
             }, ...prev.slice(0, 9)]);
@@ -908,7 +965,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, paymentForm, vault, signAndExecute, notify, loadVault, validatePayment]);
+  }, [vaultId, account?.address, paymentForm, vault, signAndExecute, notify, loadVault, validatePayment, recipientENSResolution.result]);
 
   // Initialize constraint form when vault loads
   useEffect(() => {
@@ -1047,8 +1104,13 @@ export default function App() {
       return;
     }
 
-    if (!newAgentAddress || !newAgentAddress.startsWith('0x')) {
-      notify('Enter a valid agent address', 'error');
+    // Use ENS-resolved address if available
+    const agentAddress = newAgentENSResolution.result?.success && newAgentENSResolution.result.address
+      ? newAgentENSResolution.result.address
+      : newAgentAddress;
+
+    if (!isValidAddress(agentAddress)) {
+      notify('Enter a valid agent address or ENS name', 'error');
       return;
     }
 
@@ -1062,7 +1124,7 @@ export default function App() {
         typeArguments: [assetType],
         arguments: [
           tx.object(vaultId),
-          tx.pure.address(newAgentAddress),
+          tx.pure.address(agentAddress), // Use resolved ENS address
         ],
       });
 
@@ -1086,7 +1148,7 @@ export default function App() {
     } catch (error) {
       notify(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error');
     }
-  }, [vaultId, account?.address, vault, newAgentAddress, signAndExecute, notify, loadVault]);
+  }, [vaultId, account?.address, vault, newAgentAddress, newAgentENSResolution.result, signAndExecute, notify, loadVault]);
 
   // ============================================================================
   // EFFECTS
@@ -1164,7 +1226,24 @@ export default function App() {
       <header className="app-header">
         <div className="header-left">
           <span className="logo">AgentVault</span>
-          <span className="network-badge">Sui Testnet</span>
+          <div className="powered-by">
+            <span className="powered-label">Powered by</span>
+            <div className="chain-logos">
+              <img src={SUI_LOGO} alt="Sui" className="chain-logo" title="Built on Sui" />
+              <span className="chain-plus">+</span>
+              <img src={ENS_LOGO} alt="ENS" className="chain-logo" title="ENS Integration" />
+            </div>
+          </div>
+        </div>
+        <div className="header-center">
+          <span className="network-badge sui-badge">
+            <img src={SUI_LOGO} alt="" className="badge-icon" />
+            Sui Testnet
+          </span>
+          <span className="network-badge ens-badge">
+            <img src={ENS_LOGO} alt="" className="badge-icon" />
+            ENS Mainnet
+          </span>
         </div>
         <div className="header-right">
           <ConnectButton />
@@ -1174,7 +1253,17 @@ export default function App() {
       {/* Hero Section */}
       <section className="hero">
         <div className="hero-content">
-          <span className="eyebrow">Constrained Agent Spending on Sui</span>
+          {/* <div className="hero-badges">
+            <span className="hero-badge sui">
+              <img src={SUI_LOGO} alt="" />
+              Sui
+            </span>
+            <span className="hero-badge ens">
+              <img src={ENS_LOGO} alt="" />
+              ENS
+            </span>
+          </div> */}
+          <span className="eyebrow">Constrained Agent Spending on Sui + ENS</span>
           <h1>
             Give your AI a wallet.
             <br />
@@ -1182,7 +1271,7 @@ export default function App() {
           </h1>
           <p className="lead">
             AgentVault lets autonomous agents trade and spend within hard, on-chain constraints.
-            Daily caps. Per-transaction limits. No exceptions. No trust required.
+            Daily caps. Per-transaction limits. <strong>ENS-powered profiles.</strong> No trust required.
           </p>
           {!account && (
             <div className="hero-cta">
@@ -1236,7 +1325,10 @@ export default function App() {
         {featureCards.map((card) => (
           <article key={card.title} className="brut-card" style={{ background: card.color }}>
             <div className="card-body">
-              <h3>{card.title}</h3>
+              <div className="card-title-row">
+                {card.icon && <img src={card.icon} alt="" className="card-feature-icon" />}
+                <h3>{card.title}</h3>
+              </div>
               <p>{card.text}</p>
             </div>
           </article>
@@ -1579,35 +1671,132 @@ export default function App() {
 
         {/* ==================== CREATE TAB ==================== */}
         {activeTab === 'create' && (
-          <section className="grid">
+          <section className="grid create-section">
+            {/* Left Column - ENS Profiles + Intent */}
             <div className="grid-card">
               <div className="card-head">
-                <h2>Define Constraints</h2>
+                <h2>
+                  <img src={ENS_LOGO} alt="ENS" className="card-head-icon" />
+                  Load ENS Profile
+                </h2>
+                <span className="card-badge ens-badge-small">ENS Powered</span>
               </div>
-              <label className="field">
-                Describe your spending limits in plain English
-                <textarea
-                  value={intent}
-                  onChange={(e) => setIntent(e.target.value)}
-                  rows={3}
-                  placeholder="e.g., Spend up to $100 per day, max $25 per trade, keep $10 minimum"
-                />
-              </label>
-              <button className="btn" onClick={parseIntent} disabled={loading.intent}>
-                {loading.intent ? 'Parsing...' : 'Parse Intent'}
-              </button>
 
+              {/* ENS Profile Selector */}
+              <div className="ens-profile-section">
+                <div className="ens-profile-header">
+                  <span className="meta-label">Select a Constraint Profile from ENS</span>
+                </div>
+
+                {/* Preset Profiles */}
+                <div className="ens-profile-grid">
+                  {Object.entries(DEMO_CONSTRAINT_PROFILES).map(([key, profile]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`ens-profile-card ${selectedProfileKey === key ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedProfileKey(key);
+                        setIntentResult({
+                          success: true,
+                          parsed: {
+                            dailyLimit: (profile.dailyLimit || 100) * 1_000_000_000,
+                            perTxLimit: (profile.perTxLimit || 25) * 1_000_000_000,
+                            alertThreshold: (profile.alertThreshold || 80) * 1_000_000_000,
+                            minBalance: (profile.minBalance || 10) * 1_000_000_000,
+                            yieldEnabled: profile.yieldEnabled,
+                          },
+                          formatted: `Daily: ${profile.dailyLimit}\nPer-TX: ${profile.perTxLimit}\nAlert: ${profile.alertThreshold}\nMin Balance: ${profile.minBalance}`,
+                          confidence: '100%',
+                        });
+                        notify(`Loaded "${key}" profile from ENS`, 'success');
+                      }}
+                    >
+                      <div className="ens-profile-name">
+                        <img src={ENS_LOGO} alt="" className="ens-mini-icon" />
+                        {profile.name}
+                      </div>
+                      <div className="ens-profile-limits">
+                        <span>Daily: {profile.dailyLimit}</span>
+                        <span>Per-TX: {profile.perTxLimit}</span>
+                      </div>
+                      <div className="ens-profile-desc">{profile.description}</div>
+                      {selectedProfileKey === key && <span className="ens-profile-check">Loaded</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom ENS Profile Input */}
+                <div className="ens-custom-profile">
+                  <label className="field">
+                    Or load from custom ENS name
+                    <div className="ens-input-wrapper">
+                      <img src={ENS_LOGO} alt="" className="ens-input-icon" />
+                      <input
+                        type="text"
+                        value={customProfileENS}
+                        onChange={(e) => setCustomProfileENS(e.target.value)}
+                        placeholder="yourprofile.eth"
+                        className="ens-input"
+                      />
+                      <button
+                        type="button"
+                        className="btn small"
+                        onClick={() => ensConstraintProfile.load(customProfileENS)}
+                        disabled={ensConstraintProfile.isLoading || !customProfileENS}
+                      >
+                        {ensConstraintProfile.isLoading ? '...' : 'Load'}
+                      </button>
+                    </div>
+                    <span className="field-hint">
+                      Load constraint presets stored in ENS text records
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="section-divider">
+                <span>OR</span>
+              </div>
+
+              {/* Manual Intent Parsing */}
+              <div className="manual-intent-section">
+                <div className="meta-label">Define constraints manually</div>
+                <label className="field">
+                  <textarea
+                    value={intent}
+                    onChange={(e) => {
+                      setIntent(e.target.value);
+                      setSelectedProfileKey(''); // Clear profile selection
+                    }}
+                    rows={2}
+                    placeholder="e.g., Spend up to $100 per day, max $25 per trade"
+                  />
+                </label>
+                <button className="btn" onClick={parseIntent} disabled={loading.intent}>
+                  {loading.intent ? 'Parsing...' : 'Parse Intent'}
+                </button>
+              </div>
+
+              {/* Result Preview */}
               {intentResult && (
-                <div className="intent-result">
-                  <div className="meta-label">Parsed Constraints</div>
+                <div className={`intent-result ${selectedProfileKey ? 'ens-loaded' : ''}`}>
+                  <div className="intent-result-header">
+                    {selectedProfileKey && <img src={ENS_LOGO} alt="" className="ens-mini-icon" />}
+                    <span className="meta-label">
+                      {selectedProfileKey ? 'ENS Profile Loaded' : 'Parsed Constraints'}
+                    </span>
+                  </div>
                   <pre className="code">{intentResult.formatted}</pre>
                   <div className="confidence-badge" data-level={intentResult.confidence}>
-                    Confidence: {intentResult.confidence}
+                    {selectedProfileKey ? 'From ENS' : `Confidence: ${intentResult.confidence}`}
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Right Column - Create Vault */}
             <div className="grid-card">
               <div className="card-head">
                 <h2>Create Vault</h2>
@@ -1620,19 +1809,51 @@ export default function App() {
                 </div>
               ) : !intentResult ? (
                 <div className="warning-banner">
-                  <p>Parse your intent first to set constraints</p>
+                  <p>Load an ENS profile or parse your intent first</p>
                 </div>
               ) : (
                 <>
+                  {/* Agent Address with ENS Resolution */}
                   <label className="field">
-                    Agent Address (who can spend)
-                    <input
-                      value={createForm.agentAddress}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, agentAddress: e.target.value }))}
-                      placeholder="0x..."
-                    />
+                    <span className="field-label">
+                      Agent Address
+                      <span className="ens-support-badge">
+                        <img src={ENS_LOGO} alt="" /> ENS Supported
+                      </span>
+                    </span>
+                    <div className="ens-input-wrapper">
+                      <input
+                        value={createForm.agentAddress}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, agentAddress: e.target.value }))}
+                        placeholder="0x... or vitalik.eth"
+                        className={agentENSResolution.result?.success ? 'ens-resolved' : ''}
+                      />
+                      {agentENSResolution.isLoading && <span className="ens-loading">Resolving...</span>}
+                    </div>
+
+                    {/* ENS Resolution Result */}
+                    {agentENSResolution.result?.success && (
+                      <div className="ens-resolution-result success">
+                        {agentENSResolution.result.avatar && (
+                          <img src={agentENSResolution.result.avatar} alt="" className="ens-avatar" />
+                        )}
+                        <div className="ens-resolution-info">
+                          {agentENSResolution.result.ensName && (
+                            <span className="ens-name">{agentENSResolution.result.ensName}</span>
+                          )}
+                          <span className="ens-address">{formatAddress(agentENSResolution.result.address || '')}</span>
+                        </div>
+                        <span className="ens-verified">Verified</span>
+                      </div>
+                    )}
+                    {agentENSResolution.error && (
+                      <div className="ens-resolution-result error">
+                        <span>{agentENSResolution.error}</span>
+                      </div>
+                    )}
+
                     <span className="field-hint">
-                      Use your own address to test, or another wallet for real agent
+                      Enter an ENS name (like vitalik.eth) or Ethereum address
                     </span>
                   </label>
 
@@ -1803,14 +2024,43 @@ export default function App() {
                   {/* Payment Form */}
                   <div className="payment-form">
                     <label className="field">
-                      <span className="field-label">Recipient Address</span>
-                      <input
-                        type="text"
-                        value={paymentForm.recipient}
-                        onChange={(e) => setPaymentForm((f) => ({ ...f, recipient: e.target.value }))}
-                        placeholder="0x..."
-                        className="input-address"
-                      />
+                      <span className="field-label">
+                        Recipient Address
+                        <span className="ens-support-badge">
+                          <img src={ENS_LOGO} alt="" /> ENS Supported
+                        </span>
+                      </span>
+                      <div className="ens-input-wrapper payment-recipient-input">
+                        <input
+                          type="text"
+                          value={paymentForm.recipient}
+                          onChange={(e) => setPaymentForm((f) => ({ ...f, recipient: e.target.value }))}
+                          placeholder="0x... or vitalik.eth"
+                          className={`input-address ${recipientENSResolution.result?.success ? 'ens-resolved' : ''}`}
+                        />
+                        {recipientENSResolution.isLoading && <span className="ens-loading-inline">Resolving...</span>}
+                      </div>
+
+                      {/* ENS Resolution Result for Recipient */}
+                      {recipientENSResolution.result?.success && (
+                        <div className="ens-resolution-result success compact">
+                          {recipientENSResolution.result.avatar && (
+                            <img src={recipientENSResolution.result.avatar} alt="" className="ens-avatar-small" />
+                          )}
+                          <div className="ens-resolution-info">
+                            {recipientENSResolution.result.ensName && (
+                              <span className="ens-name">{recipientENSResolution.result.ensName}</span>
+                            )}
+                            <span className="ens-address">{formatAddress(recipientENSResolution.result.address || '')}</span>
+                          </div>
+                          <span className="ens-verified-small">Verified</span>
+                        </div>
+                      )}
+                      {recipientENSResolution.error && !recipientENSResolution.isLoading && paymentForm.recipient && (
+                        <div className="ens-resolution-result error compact">
+                          <span>{recipientENSResolution.error}</span>
+                        </div>
+                      )}
                     </label>
 
                     <label className="field amount-field">
@@ -2361,10 +2611,23 @@ export default function App() {
 
       {/* Footer */}
       <footer className="footer">
-        <div>AgentVault · HackMoney 2026 · Built on Sui with DeepBook v3</div>
+        <div className="footer-brand">
+          <span className="footer-logo">AgentVault</span>
+          <span className="footer-tagline">ETHGlobal HackMoney 2026</span>
+          <div className="footer-chains">
+            <img src={SUI_LOGO} alt="Sui" className="footer-chain-logo" />
+            <span>Sui + DeepBook v3</span>
+            <span className="footer-divider">|</span>
+            <img src={ENS_LOGO} alt="ENS" className="footer-chain-logo" />
+            <span>ENS Integration</span>
+          </div>
+        </div>
         <div className="footer-links">
           <a href="https://docs.sui.io/standards/deepbookv3" target="_blank" rel="noreferrer" className="btn small ghost">
-            DeepBook Docs
+            <img src={SUI_LOGO} alt="" className="btn-icon-img" /> Sui Docs
+          </a>
+          <a href="https://docs.ens.domains" target="_blank" rel="noreferrer" className="btn small ghost">
+            <img src={ENS_LOGO} alt="" className="btn-icon-img" /> ENS Docs
           </a>
           <a href="https://github.com" target="_blank" rel="noreferrer" className="btn small ghost">
             GitHub
