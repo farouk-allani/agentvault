@@ -75,10 +75,11 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   });
 });
 
-// Start server
-const PORT = env.PORT;
-app.listen(PORT, () => {
-  console.log(`
+// Start server (only when running directly, not on Vercel serverless)
+if (!process.env.VERCEL) {
+  const PORT = env.PORT;
+  app.listen(PORT, () => {
+    console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                    AgentVault Backend                     ║
 ╠═══════════════════════════════════════════════════════════╣
@@ -86,15 +87,16 @@ app.listen(PORT, () => {
 ║  Network: ${env.SUI_NETWORK.padEnd(47)}║
 ║  Package: ${(env.PACKAGE_ID || 'Not configured').slice(0, 47).padEnd(47)}║
 ╚═══════════════════════════════════════════════════════════╝
-  `);
-  console.log('Available endpoints:');
-  console.log('  GET  /health              - Health check');
-  console.log('  GET  /api                 - API documentation');
-  console.log('  GET  /api/vault/:id       - Get vault details');
-  console.log('  POST /api/vault/parse-intent - Parse intent');
-  console.log('  POST /api/swap/build      - Build swap transaction');
-  console.log('  GET  /api/swap/pools      - Get DeepBook pools');
-  console.log('');
-});
+    `);
+    console.log('Available endpoints:');
+    console.log('  GET  /health              - Health check');
+    console.log('  GET  /api                 - API documentation');
+    console.log('  GET  /api/vault/:id       - Get vault details');
+    console.log('  POST /api/vault/parse-intent - Parse intent');
+    console.log('  POST /api/swap/build      - Build swap transaction');
+    console.log('  GET  /api/swap/pools      - Get DeepBook pools');
+    console.log('');
+  });
+}
 
 export default app;
