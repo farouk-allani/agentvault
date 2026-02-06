@@ -1825,9 +1825,19 @@ export default function App() {
                       <input
                         value={createForm.agentAddress}
                         onChange={(e) => setCreateForm((f) => ({ ...f, agentAddress: e.target.value }))}
-                        placeholder="0x... or vitalik.eth"
+                        placeholder="0x... (SUI/ETH) or vitalik.eth"
                         className={agentENSResolution.result?.success ? 'ens-resolved' : ''}
                       />
+                      {account?.address && (
+                        <button
+                          type="button"
+                          className="btn-use-wallet"
+                          title="Use connected wallet address"
+                          onClick={() => setCreateForm((f) => ({ ...f, agentAddress: account.address }))}
+                        >
+                          My Wallet
+                        </button>
+                      )}
                       {agentENSResolution.isLoading && <span className="ens-loading">Resolving...</span>}
                     </div>
 
@@ -1853,7 +1863,7 @@ export default function App() {
                     )}
 
                     <span className="field-hint">
-                      Enter an ENS name (like vitalik.eth) or Ethereum address
+                      Enter a SUI address, ENS name (like vitalik.eth), or Ethereum address
                     </span>
                   </label>
 
@@ -2395,12 +2405,24 @@ export default function App() {
                     <div className="change-agent-form">
                       <label className="field">
                         <span className="field-label">New Agent Address</span>
-                        <input
-                          type="text"
-                          value={newAgentAddress}
-                          onChange={(e) => setNewAgentAddress(e.target.value)}
-                          placeholder="0x..."
-                        />
+                        <div className="ens-input-wrapper">
+                          <input
+                            type="text"
+                            value={newAgentAddress}
+                            onChange={(e) => setNewAgentAddress(e.target.value)}
+                            placeholder="0x... (SUI/ETH) or vitalik.eth"
+                          />
+                          {account?.address && (
+                            <button
+                              type="button"
+                              className="btn-use-wallet"
+                              title="Use connected wallet address"
+                              onClick={() => setNewAgentAddress(account.address)}
+                            >
+                              My Wallet
+                            </button>
+                          )}
+                        </div>
                       </label>
                       <button
                         className="btn"

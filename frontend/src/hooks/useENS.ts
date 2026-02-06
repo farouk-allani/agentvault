@@ -11,6 +11,7 @@ import {
   loadENSProfile,
   isValidENSName,
   isValidAddress,
+  isValidSuiAddress,
   type ENSResolutionResult,
   type ENSConstraintProfile,
   type ENSProfile,
@@ -56,9 +57,17 @@ export function useENSResolution(
 
     const trimmed = value.trim();
 
+    // SUI addresses: accept directly without ENS resolution
+    if (isValidSuiAddress(trimmed)) {
+      setResult({ success: true, address: trimmed, ensName: null, avatar: null, error: null });
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
     // Skip if it's not a valid ENS name or address format
     if (!isValidENSName(trimmed) && !isValidAddress(trimmed)) {
-      // But if it looks like a partial ENS name, don't show error yet
+      // But if it looks like a partial address or ENS name, don't show error yet
       if (trimmed.includes('.') || trimmed.startsWith('0x')) {
         setResult(null);
         setError(null);

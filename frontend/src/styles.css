@@ -2178,6 +2178,24 @@ h1 {
   position: relative;
 }
 
+.btn-use-wallet {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-use-wallet:hover {
+  background: #2563eb;
+}
+
 .ens-input-icon {
   width: 24px;
   height: 24px;

@@ -308,8 +308,13 @@ export async function resolveENSOrAddress(input: string): Promise<ENSResolutionR
         result.error = `Could not resolve ENS name: ${trimmedInput}`;
       }
     }
-    // Check if it's an Ethereum address
-    else if (trimmedInput.startsWith('0x') && trimmedInput.length === 42) {
+    // Check if it's a SUI address (0x + 64 hex) — no ENS resolution for SUI
+    else if (isValidSuiAddress(trimmedInput)) {
+      result.success = true;
+      result.address = trimmedInput;
+    }
+    // Check if it's an Ethereum address (0x + 40 hex)
+    else if (isValidEthAddress(trimmedInput)) {
       result.success = true;
       result.address = trimmedInput;
 
@@ -322,7 +327,7 @@ export async function resolveENSOrAddress(input: string): Promise<ENSResolutionR
     }
     // Invalid input
     else {
-      result.error = 'Invalid input: must be an ENS name (*.eth) or Ethereum address (0x...)';
+      result.error = 'Invalid input: must be an ENS name (*.eth), Ethereum address, or SUI address (0x...)';
     }
   } catch (error) {
     result.error = error instanceof Error ? error.message : 'Resolution failed';
@@ -352,12 +357,28 @@ export function isValidENSName(input: string): boolean {
 }
 
 /**
- * Check if a string is a valid Ethereum address
+ * Check if a string is a valid Ethereum address (0x + 40 hex)
  */
-export function isValidAddress(input: string): boolean {
+export function isValidEthAddress(input: string): boolean {
   if (!input) return false;
   const trimmed = input.trim();
   return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+}
+
+/**
+ * Check if a string is a valid SUI address (0x + 64 hex)
+ */
+export function isValidSuiAddress(input: string): boolean {
+  if (!input) return false;
+  const trimmed = input.trim();
+  return /^0x[a-fA-F0-9]{64}$/.test(trimmed);
+}
+
+/**
+ * Check if a string is a valid address (Ethereum or SUI)
+ */
+export function isValidAddress(input: string): boolean {
+  return isValidEthAddress(input) || isValidSuiAddress(input);
 }
 
 /**
