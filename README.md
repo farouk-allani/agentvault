@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="https://assets.coingecko.com/coins/images/26375/standard/sui_asset.jpeg" width="60" alt="Sui" />
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-X_xAESEu--eipBkRWlj07HCZaEEtwLankg&s" width="60" alt="Sui" />
   &nbsp;&nbsp;&nbsp;
-  <img src="https://avatars.githubusercontent.com/u/47940724?s=200&v=4" width="60" alt="ENS" />
+  <img src="https://ens.domains/assets/brand/mark/ens-mark-Blue.svg" width="60" alt="ENS" />
 </p>
 
 <h1 align="center">AgentVault</h1>
@@ -16,7 +16,7 @@
   </a>
   &nbsp;
   <a href="#ens-integration">
-    <img src="https://img.shields.io/badge/ENS-Constraint_Profiles-5298FF?style=for-the-badge" alt="ENS Prize" />
+    <img src="https://img.shields.io/badge/ENS-Constraint_Profiles-5298FF?style=for-the-badge" alt="ENS Prize"  />
   </a>
 </p>
 
@@ -30,19 +30,7 @@
 
 AgentVault enables **autonomous AI agents** to execute transactions and trades within **hard, on-chain spending constraints**. Built on **Sui blockchain** with **DeepBook v3** integration, and featuring a novel **ENS-powered constraint profile system**.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                 │
-│   🤖 AI Agent wants to trade                                                   │
-│                          ↓                                                      │
-│   📋 Load constraint profile from ENS (conservative.agentvault.eth)            │
-│                          ↓                                                      │
-│   🔐 Vault enforces: $100/day max, $25/tx max, $10 min balance                 │
-│                          ↓                                                      │
-│   ✅ Trade executes on DeepBook v3 (or ❌ rejected if over limits)             │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+<img width="627" height="auto" alt="overview" src="https://github.com/user-attachments/assets/b41f1259-95c8-4189-8ca8-fd46ac5c35fc" />
 
 ---
 
@@ -104,33 +92,8 @@ AgentVault enables **autonomous AI agents** to execute transactions and trades w
 
 Instead of manually entering constraints, **load pre-configured profiles from ENS names**:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                         ENS CONSTRAINT PROFILES                                 │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐     │
-│  │ conservative        │  │ moderate            │  │ aggressive          │     │
-│  │ .agentvault.eth     │  │ .agentvault.eth     │  │ .agentvault.eth     │     │
-│  │                     │  │                     │  │                     │     │
-│  │ Daily:    $50       │  │ Daily:    $200      │  │ Daily:    $1000     │     │
-│  │ Per-TX:   $10       │  │ Per-TX:   $50       │  │ Per-TX:   $250      │     │
-│  │ Alert:    $40       │  │ Alert:    $160      │  │ Alert:    $800      │     │
-│  │ Min Bal:  $20       │  │ Min Bal:  $25       │  │ Min Bal:  $50       │     │
-│  │                     │  │                     │  │                     │     │
-│  │ "Low-risk profile   │  │ "Balanced for       │  │ "High-limit for     │     │
-│  │  for beginners"     │  │  everyday trading"  │  │  active traders"    │     │
-│  └─────────────────────┘  └─────────────────────┘  └─────────────────────┘     │
-│                                                                                 │
-│  ENS Text Records Schema:                                                       │
-│  ├── agentvault.dailyLimit: "50"                                               │
-│  ├── agentvault.perTxLimit: "10"                                               │
-│  ├── agentvault.alertThreshold: "40"                                           │
-│  ├── agentvault.minBalance: "20"                                               │
-│  └── description: "Conservative trading profile"                               │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+<img width="633" height="581" alt="ens profile" src="https://github.com/user-attachments/assets/5dbc6cf2-331c-4d85-a21c-259093ea53e5" />
+
 
 **Why this is creative:**
 - Goes beyond name→address mapping
@@ -140,37 +103,7 @@ Instead of manually entering constraints, **load pre-configured profiles from EN
 
 ### 🔄 ENS Name Resolution
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           ENS RESOLUTION FLOW                                   │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  PAYMENT TO ENS NAME                    AGENT IDENTITY                          │
-│  ──────────────────────                 ──────────────────────                  │
-│                                                                                 │
-│  User enters: "alice.eth"               User enters: "trading-bot.eth"          │
-│        │                                      │                                 │
-│        ▼                                      ▼                                 │
-│  ┌─────────────┐                        ┌─────────────┐                         │
-│  │ ENS Mainnet │                        │ ENS Mainnet │                         │
-│  │  Resolver   │                        │  Resolver   │                         │
-│  └─────────────┘                        └─────────────┘                         │
-│        │                                      │                                 │
-│        ▼                                      ▼                                 │
-│  0xd8dA6BF26964aF...                    0x742d35Cc6634C...                      │
-│        │                                      │                                 │
-│        ▼                                      ▼                                 │
-│  ┌─────────────────┐                    ┌─────────────────┐                     │
-│  │  Payment sent   │                    │  Agent set on   │                     │
-│  │  on Sui chain   │                    │  Sui vault      │                     │
-│  └─────────────────┘                    └─────────────────┘                     │
-│                                                                                 │
-│  ✓ Shows ENS avatar if available                                               │
-│  ✓ Displays "Verified" badge on resolution                                     │
-│  ✓ Cross-chain: ENS on Ethereum, Vault on Sui                                  │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+<img width="541" height="559" alt="ens resolution flow" src="https://github.com/user-attachments/assets/04940078-a992-4cba-a9a1-00f111c1e937" />
 
 ---
 
@@ -607,12 +540,12 @@ npm run agent-demo
   <strong>ETHGlobal HackMoney 2026</strong>
 </p>
 
-<p align="center">
+<!-- <p align="center">
   <img src="https://assets.coingecko.com/coins/images/26375/standard/sui_asset.jpeg" width="40" alt="Sui" />
   <span>&nbsp;&nbsp;Sui Track&nbsp;&nbsp;</span>
   <img src="https://avatars.githubusercontent.com/u/47940724?s=200&v=4" width="40" alt="ENS" />
   <span>&nbsp;&nbsp;ENS Track</span>
-</p>
+</p> -->
 
 ---
 
