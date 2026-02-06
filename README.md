@@ -1,199 +1,401 @@
-# AgentVault
+<p align="center">
+  <img src="https://assets.coingecko.com/coins/images/26375/standard/sui_asset.jpeg" width="60" alt="Sui" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://avatars.githubusercontent.com/u/47940724?s=200&v=4" width="60" alt="ENS" />
+</p>
 
-**Constrained Autonomous Agent Spending on Sui**
+<h1 align="center">AgentVault</h1>
 
-> Give your AI a wallet. With limits.
+<p align="center">
+  <strong>Constrained Autonomous Agent Spending on Sui + ENS Integration</strong>
+</p>
 
-AgentVault enables autonomous AI agents to execute transactions and trades within hard, on-chain spending constraints. Daily caps, per-transaction limits, minimum balances - all enforced by Move smart contracts on Sui blockchain.
+<p align="center">
+  <a href="#sui-prize">
+    <img src="https://img.shields.io/badge/Sui-DeepBook_v3-4DA2FF?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgo" alt="Sui Prize" />
+  </a>
+  &nbsp;
+  <a href="#ens-integration">
+    <img src="https://img.shields.io/badge/ENS-Constraint_Profiles-5298FF?style=for-the-badge" alt="ENS Prize" />
+  </a>
+</p>
 
-## The Problem
+<p align="center">
+  <em>Give your AI a wallet. With limits.</em>
+</p>
 
-AI agents need to interact with DeFi protocols autonomously - executing trades, making payments, managing positions. But giving an AI unlimited access to funds is risky. Traditional solutions require human co-signing for every transaction, defeating the purpose of autonomy.
+---
 
-## The Solution
+## Overview
 
-AgentVault creates **shared object vaults** on Sui that agents can spend from without owner signatures, but within strict on-chain limits:
+AgentVault enables **autonomous AI agents** to execute transactions and trades within **hard, on-chain spending constraints**. Built on **Sui blockchain** with **DeepBook v3** integration, and featuring a novel **ENS-powered constraint profile system**.
 
-- **Daily spending caps** - Agent can't exceed X amount per 24 hours
-- **Per-transaction limits** - No single trade can exceed Y amount
-- **Minimum balance enforcement** - Vault must retain Z minimum at all times
-- **Alert thresholds** - Events emitted when spending exceeds threshold
-- **Emergency pause** - Owner can halt all activity instantly
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                 │
+│   🤖 AI Agent wants to trade                                                   │
+│                          ↓                                                      │
+│   📋 Load constraint profile from ENS (conservative.agentvault.eth)            │
+│                          ↓                                                      │
+│   🔐 Vault enforces: $100/day max, $25/tx max, $10 min balance                 │
+│                          ↓                                                      │
+│   ✅ Trade executes on DeepBook v3 (or ❌ rejected if over limits)             │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
-The constraints are enforced by the Move VM itself - not a backend, not a multisig, but actual smart contract logic that cannot be bypassed.
+---
+
+## Hackathon Prizes
+
+<table>
+<tr>
+<td width="50%">
+
+### 🔵 Sui Prize
+
+**DeepBook v3 Integration**
+
+- Native CLOB trading
+- On-chain constraint enforcement
+- Shared object vault architecture
+- Real autonomous agent spending
+
+</td>
+<td width="50%">
+
+### 🔷 ENS Prize
+
+**Most Creative Use of ENS for DeFi**
+
+- Constraint profiles stored in ENS text records
+- Pay to ENS names (alice.eth → 0x...)
+- Agent identity via ENS resolution
+- Decentralized DeFi configuration
+
+</td>
+</tr>
+</table>
+
+---
+
+## Key Features
+
+### 🛡️ On-Chain Constraints
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    VAULT CONSTRAINTS                             │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   Daily Limit        │████████████████░░░░│  $100/day           │
+│   Per-TX Limit       │████████░░░░░░░░░░░░│  $25/transaction    │
+│   Alert Threshold    │████████████████░░░░│  $80 (triggers event)│
+│   Min Balance        │██░░░░░░░░░░░░░░░░░░│  $10 (floor)        │
+│   Emergency Pause    │ ○ OFF               │  Owner can halt     │
+│                                                                  │
+│   ✓ Enforced by Move VM - Cannot be bypassed                    │
+│   ✓ No backend, no multisig, pure smart contract               │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 🔷 ENS Constraint Profiles (Novel Feature!)
+
+Instead of manually entering constraints, **load pre-configured profiles from ENS names**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         ENS CONSTRAINT PROFILES                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐     │
+│  │ conservative        │  │ moderate            │  │ aggressive          │     │
+│  │ .agentvault.eth     │  │ .agentvault.eth     │  │ .agentvault.eth     │     │
+│  │                     │  │                     │  │                     │     │
+│  │ Daily:    $50       │  │ Daily:    $200      │  │ Daily:    $1000     │     │
+│  │ Per-TX:   $10       │  │ Per-TX:   $50       │  │ Per-TX:   $250      │     │
+│  │ Alert:    $40       │  │ Alert:    $160      │  │ Alert:    $800      │     │
+│  │ Min Bal:  $20       │  │ Min Bal:  $25       │  │ Min Bal:  $50       │     │
+│  │                     │  │                     │  │                     │     │
+│  │ "Low-risk profile   │  │ "Balanced for       │  │ "High-limit for     │     │
+│  │  for beginners"     │  │  everyday trading"  │  │  active traders"    │     │
+│  └─────────────────────┘  └─────────────────────┘  └─────────────────────┘     │
+│                                                                                 │
+│  ENS Text Records Schema:                                                       │
+│  ├── agentvault.dailyLimit: "50"                                               │
+│  ├── agentvault.perTxLimit: "10"                                               │
+│  ├── agentvault.alertThreshold: "40"                                           │
+│  ├── agentvault.minBalance: "20"                                               │
+│  └── description: "Conservative trading profile"                               │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Why this is creative:**
+- Goes beyond name→address mapping
+- Uses ENS as a **decentralized DeFi configuration store**
+- Profiles are **shareable and composable**
+- Your risk tolerance, stored on-chain!
+
+### 🔄 ENS Name Resolution
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           ENS RESOLUTION FLOW                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  PAYMENT TO ENS NAME                    AGENT IDENTITY                          │
+│  ──────────────────────                 ──────────────────────                  │
+│                                                                                 │
+│  User enters: "alice.eth"               User enters: "trading-bot.eth"          │
+│        │                                      │                                 │
+│        ▼                                      ▼                                 │
+│  ┌─────────────┐                        ┌─────────────┐                         │
+│  │ ENS Mainnet │                        │ ENS Mainnet │                         │
+│  │  Resolver   │                        │  Resolver   │                         │
+│  └─────────────┘                        └─────────────┘                         │
+│        │                                      │                                 │
+│        ▼                                      ▼                                 │
+│  0xd8dA6BF26964aF...                    0x742d35Cc6634C...                      │
+│        │                                      │                                 │
+│        ▼                                      ▼                                 │
+│  ┌─────────────────┐                    ┌─────────────────┐                     │
+│  │  Payment sent   │                    │  Agent set on   │                     │
+│  │  on Sui chain   │                    │  Sui vault      │                     │
+│  └─────────────────┘                    └─────────────────┘                     │
+│                                                                                 │
+│  ✓ Shows ENS avatar if available                                               │
+│  ✓ Displays "Verified" badge on resolution                                     │
+│  ✓ Cross-chain: ENS on Ethereum, Vault on Sui                                  │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              AgentVault Architecture                         │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-    ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-    │    Owner     │         │    Agent     │         │   DeepBook   │
-    │   (Human)    │         │    (AI)      │         │     v3       │
-    └──────┬───────┘         └──────┬───────┘         └──────┬───────┘
-           │                        │                        │
-           │ create_vault()         │                        │
-           │ deposit()              │ execute_swap()         │
-           │ withdraw()             │ execute_payment()      │
-           │ update_constraints()   │                        │
-           │ set_paused()           │                        │
-           ▼                        ▼                        ▼
-    ┌─────────────────────────────────────────────────────────────────┐
-    │                         Sui Blockchain                           │
-    │  ┌───────────────────────────────────────────────────────────┐  │
-    │  │                    Vault<T> (Shared Object)                │  │
-    │  │  ┌─────────────────────────────────────────────────────┐  │  │
-    │  │  │  Constraints:                                        │  │  │
-    │  │  │  • daily_limit: 100 USDC                            │  │  │
-    │  │  │  • per_tx_limit: 25 USDC                            │  │  │
-    │  │  │  • min_balance: 10 USDC                             │  │  │
-    │  │  │  • alert_threshold: 80 USDC                         │  │  │
-    │  │  │  • paused: false                                    │  │  │
-    │  │  └─────────────────────────────────────────────────────┘  │  │
-    │  │  ┌─────────────────────────────────────────────────────┐  │  │
-    │  │  │  State:                                              │  │  │
-    │  │  │  • balance: 500 USDC                                │  │  │
-    │  │  │  • spent_today: 45 USDC                             │  │  │
-    │  │  │  • tx_count: 3                                      │  │  │
-    │  │  └─────────────────────────────────────────────────────┘  │  │
-    │  └───────────────────────────────────────────────────────────┘  │
-    │                              │                                   │
-    │                              ▼                                   │
-    │  ┌───────────────────────────────────────────────────────────┐  │
-    │  │              Constraint Enforcement (Move VM)              │  │
-    │  │  assert!(sender == vault.agent)                           │  │
-    │  │  assert!(!vault.constraints.paused)                       │  │
-    │  │  assert!(amount <= vault.constraints.per_tx_limit)        │  │
-    │  │  assert!(spent_today + amount <= daily_limit)             │  │
-    │  │  assert!(balance - amount >= min_balance)                 │  │
-    │  └───────────────────────────────────────────────────────────┘  │
-    │                              │                                   │
-    │                              ▼                                   │
-    │  ┌───────────────────────────────────────────────────────────┐  │
-    │  │                   DeepBook v3 Pool                         │  │
-    │  │         swap_exact_quote_for_base(pool, coin, ...)        │  │
-    │  └───────────────────────────────────────────────────────────┘  │
-    └─────────────────────────────────────────────────────────────────┘
-
-                              Flow Summary:
-    ┌─────────────────────────────────────────────────────────────────┐
-    │  1. Owner creates vault with constraints + deposits funds       │
-    │  2. Agent calls execute_swap() or execute_payment()            │
-    │  3. Move VM validates ALL constraints before execution          │
-    │  4. If valid: execute on DeepBook, update spent_today          │
-    │  5. If invalid: transaction aborts, no funds lost              │
-    │  6. Daily counter resets every 24 hours automatically          │
-    └─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          AGENTVAULT ARCHITECTURE                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│    ETHEREUM MAINNET                         SUI BLOCKCHAIN                      │
+│    ─────────────────                        ──────────────                      │
+│                                                                                 │
+│    ┌───────────────┐                        ┌───────────────────────────────┐   │
+│    │               │                        │                               │   │
+│    │   ENS        │  ──── Resolve ────────▶ │      AgentVault Contract     │   │
+│    │   Registry    │       Names            │                               │   │
+│    │               │                        │   ┌───────────────────────┐   │   │
+│    └───────────────┘                        │   │   Vault<T>            │   │   │
+│           │                                 │   │                       │   │   │
+│           │ Text Records                    │   │   owner: 0x...        │   │   │
+│           ▼                                 │   │   agent: 0x...        │   │   │
+│    ┌───────────────┐                        │   │   balance: 500 USDC   │   │   │
+│    │  Constraint   │  ──── Load ──────────▶ │   │   constraints: {...}  │   │   │
+│    │   Profiles    │      Profiles          │   │   spent_today: 45     │   │   │
+│    │               │                        │   │                       │   │   │
+│    │ daily: 100    │                        │   └───────────────────────┘   │   │
+│    │ perTx: 25     │                        │              │                │   │
+│    │ alert: 80     │                        │              ▼                │   │
+│    └───────────────┘                        │   ┌───────────────────────┐   │   │
+│                                             │   │  Constraint Check     │   │   │
+│                                             │   │  (Move VM)            │   │   │
+│    ┌───────────────┐                        │   └───────────────────────┘   │   │
+│    │               │                        │              │                │   │
+│    │    Owner      │  ──── Create ────────▶ │              ▼                │   │
+│    │   (Human)     │       Manage           │   ┌───────────────────────┐   │   │
+│    │               │                        │   │  DeepBook v3          │   │   │
+│    └───────────────┘                        │   │  (CLOB Trading)       │   │   │
+│                                             │   └───────────────────────┘   │   │
+│    ┌───────────────┐                        │              │                │   │
+│    │               │                        │              ▼                │   │
+│    │    Agent      │  ──── Execute ───────▶ │   ┌───────────────────────┐   │   │
+│    │    (AI)       │       Trades           │   │  Trade Executed       │   │   │
+│    │               │                        │   │  or Rejected          │   │   │
+│    └───────────────┘                        │   └───────────────────────┘   │   │
+│                                             │                               │   │
+│                                             └───────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Smart Contracts | Move (Sui) |
-| DEX Integration | DeepBook v3 |
-| Backend API | Express.js + TypeScript |
-| Frontend | React 18 + Vite + Sui dapp-kit |
-| Wallet | Sui Wallet / Suiet / Martian |
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Smart Contracts** | Move (Sui) | Vault logic, constraint enforcement |
+| **DEX** | DeepBook v3 | On-chain CLOB trading |
+| **Name Resolution** | ENS (Ethereum) | Human-readable names, constraint profiles |
+| **Backend** | Express.js + TypeScript | Transaction building, intent parsing |
+| **Frontend** | React 18 + Vite | User interface |
+| **Wallet** | Sui dapp-kit | Wallet connection |
+| **ENS Library** | viem | ENS resolution |
+
+---
 
 ## Project Structure
 
 ```
 agentvault2/
-├── contracts/           # Move smart contracts
+├── contracts/                    # Move smart contracts
 │   ├── sources/
-│   │   ├── vault.move   # Core vault + constraint logic
-│   │   └── events.move  # Event definitions
+│   │   ├── vault.move           # Core vault + constraint logic
+│   │   └── events.move          # Event definitions
 │   └── Move.toml
-├── backend/             # Express API server
+│
+├── backend/                      # Express API server
 │   └── src/
-│       ├── routes/      # API endpoints
-│       ├── services/    # Business logic
-│       └── config/      # Configuration
-├── frontend/            # React web app
+│       ├── routes/              # API endpoints
+│       │   ├── vault.ts         # Vault operations
+│       │   └── swap.ts          # DeepBook swaps
+│       ├── services/
+│       │   ├── suiClient.ts     # Sui SDK wrapper
+│       │   ├── intentParser.ts  # NLP to constraints
+│       │   └── swapService.ts   # DeepBook integration
+│       └── config/
+│
+├── frontend/                     # React web app
 │   └── src/
-│       ├── App.tsx      # Main application
-│       └── styles.css   # Styling
-└── scripts/             # Utility scripts
-    └── demo-agent.ts    # Agent demo
+│       ├── App.tsx              # Main application
+│       ├── styles.css           # Brutalist styling
+│       ├── services/
+│       │   └── ensService.ts    # 🔷 ENS resolution
+│       └── hooks/
+│           └── useENS.ts        # 🔷 ENS React hooks
+│
+└── scripts/
+    └── demo-agent.ts            # Autonomous agent demo
 ```
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
-- Sui CLI (optional, for contract deployment)
-- A Sui wallet with testnet SUI
+- Sui wallet with testnet SUI
+- (Optional) DEEP tokens for trading fees
 
-### 1. Clone and Install
+### Installation
 
 ```bash
+# Clone repository
 git clone https://github.com/your-repo/agentvault2.git
 cd agentvault2
 
-# Install backend dependencies
+# Install backend
 cd backend && npm install
 
-# Install frontend dependencies
+# Install frontend
 cd ../frontend && npm install
 ```
 
-### 2. Configure Environment
+### Configuration
 
 ```bash
 # Backend (.env)
-cd backend
-cp .env.example .env
-# Edit .env with your settings:
-# PACKAGE_ID=0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434
-# SUI_NETWORK=testnet
+PACKAGE_ID=0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434
+SUI_NETWORK=testnet
 
 # Frontend (.env)
-cd ../frontend
-cp .env.example .env
-# VITE_API_BASE=http://localhost:3001
+VITE_API_BASE=http://localhost:3001
+VITE_PACKAGE_ID=0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434
 ```
 
-### 3. Run the Application
+### Run
 
 ```bash
-# Terminal 1: Start backend
+# Terminal 1: Backend
 cd backend && npm run dev
 
-# Terminal 2: Start frontend
+# Terminal 2: Frontend
 cd frontend && npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+Open http://localhost:5173
 
-### 4. Create Your First Vault
+---
 
-1. Connect your Sui wallet
-2. Go to the "Create" tab
-3. Enter your spending constraints in plain English:
-   > "Spend up to $100 per day, max $25 per trade, keep $10 minimum"
-4. Click "Parse Intent" to convert to contract parameters
-5. Enter your agent address (can be your own wallet for testing)
-6. Enter a coin object ID for the initial deposit
-7. Click "Create Vault"
+## Usage Guide
 
-### 5. Execute a Swap (as Agent)
+### 1️⃣ Create a Vault with ENS Profile
 
-1. Go to the "Dashboard" tab and load your vault
-2. Switch to the "Swap" tab
-3. Select a DeepBook pool
-4. Enter amount and minimum output
-5. Provide a DEEP coin ID for trading fees
-6. Build and execute the transaction
+```
+┌────────────────────────────────────────────────────────────┐
+│  CREATE TAB                                                │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  🔷 Load ENS Profile                                       │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │ ┌────────────┐ ┌────────────┐ ┌────────────┐        │ │
+│  │ │Conservative│ │ Moderate   │ │ Aggressive │ ← Click │ │
+│  │ │   $50/day  │ │  $200/day  │ │ $1000/day  │        │ │
+│  │ └────────────┘ └────────────┘ └────────────┘        │ │
+│  └──────────────────────────────────────────────────────┘ │
+│                                                            │
+│  Or enter custom ENS: [myprofile.eth        ] [Load]      │
+│                                                            │
+│  ─────────────── OR ───────────────                       │
+│                                                            │
+│  📝 Manual: "Spend $100/day, max $25 per trade"           │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 2️⃣ Set Agent via ENS Name
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  AGENT ADDRESS                                  ENS ✓      │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  [trading-bot.eth                              ]           │
+│                                                            │
+│  ┌────────────────────────────────────────────────────┐   │
+│  │ 🖼️  trading-bot.eth                                │   │
+│  │     0x742d35Cc6634C0532925a3b...                   │   │
+│  │                                         ✅ Verified │   │
+│  └────────────────────────────────────────────────────┘   │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 3️⃣ Pay to ENS Names
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  💸 EXECUTE PAYMENT                                        │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  Recipient: [vitalik.eth                       ]           │
+│                                                            │
+│  ┌────────────────────────────────────────────────────┐   │
+│  │ 🖼️  vitalik.eth                                    │   │
+│  │     0xd8dA6BF26964aF9D7eEd9e03...                  │   │
+│  │                                         ✅ Verified │   │
+│  └────────────────────────────────────────────────────┘   │
+│                                                            │
+│  Amount: [10.00                ] SUI                       │
+│                                                            │
+│  [        Send Payment        ]                            │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Smart Contract API
 
-### Vault Creation
+### Vault Operations
 
 ```move
+// Create vault with constraints
 public entry fun create_vault<T>(
     initial_deposit: Coin<T>,
     agent: address,
@@ -205,12 +407,8 @@ public entry fun create_vault<T>(
     clock: &Clock,
     ctx: &mut TxContext
 )
-```
 
-### Agent Operations
-
-```move
-// Execute payment to recipient
+// Agent executes payment (checked against constraints)
 public entry fun execute_payment<T>(
     vault: &mut Vault<T>,
     recipient: address,
@@ -219,7 +417,7 @@ public entry fun execute_payment<T>(
     ctx: &mut TxContext
 )
 
-// Execute swap on DeepBook v3
+// Agent executes swap on DeepBook v3
 public entry fun execute_swap<BaseAsset, QuoteAsset>(
     vault: &mut Vault<QuoteAsset>,
     pool: &mut Pool<BaseAsset, QuoteAsset>,
@@ -235,119 +433,188 @@ public entry fun execute_swap<BaseAsset, QuoteAsset>(
 ### Owner Management
 
 ```move
-public entry fun deposit<T>(vault: &mut Vault<T>, deposit: Coin<T>, ctx: &mut TxContext)
-public entry fun withdraw<T>(vault: &mut Vault<T>, amount: u64, ctx: &mut TxContext)
-public entry fun update_constraints<T>(vault: &mut Vault<T>, ..., ctx: &mut TxContext)
-public entry fun set_paused<T>(vault: &mut Vault<T>, paused: bool, ctx: &mut TxContext)
-public entry fun set_agent<T>(vault: &mut Vault<T>, new_agent: address, ctx: &mut TxContext)
+public entry fun update_constraints<T>(vault, daily_limit, per_tx_limit, ...)
+public entry fun set_paused<T>(vault, paused: bool, ...)
+public entry fun set_agent<T>(vault, new_agent: address, ...)
+public entry fun deposit<T>(vault, coin, ...)
+public entry fun withdraw<T>(vault, amount, ...)
 ```
 
-## REST API Endpoints
+---
 
-### Vault Management
+## ENS Integration Details
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/vault/create` | POST | Build vault creation transaction |
-| `/api/vault/:id` | GET | Get vault details |
-| `/api/vault/:id/status` | GET | Get vault status with spending summary |
-| `/api/vault/:id/can-spend?amount=X` | GET | Check if amount can be spent |
-| `/api/vault/parse-intent` | POST | Parse natural language to constraints |
+### Text Record Schema
 
-### Swap Operations
+Store constraint profiles in ENS text records:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/swap/build` | POST | Build swap transaction |
-| `/api/swap/pools` | GET | Get available DeepBook pools |
-| `/api/swap/quote` | GET | Get price quote |
-| `/api/swap/validate/:vaultId` | GET | Validate swap feasibility |
+| Key | Value | Description |
+|-----|-------|-------------|
+| `agentvault.dailyLimit` | `"100"` | Max daily spending |
+| `agentvault.perTxLimit` | `"25"` | Max per transaction |
+| `agentvault.alertThreshold` | `"80"` | Alert trigger point |
+| `agentvault.minBalance` | `"10"` | Minimum vault balance |
+| `agentvault.yieldEnabled` | `"true"` | Enable yield routing |
+| `description` | `"..."` | Human-readable description |
 
-## DeepBook v3 Integration
+### ENS Service Functions
 
-AgentVault integrates with DeepBook v3, Sui's native central limit order book:
+```typescript
+// Resolve ENS name to address
+await resolveENSName("vitalik.eth") // → "0xd8dA6BF26964aF..."
 
-- **No AccountCap required** - Simplified trading flow
-- **DEEP token fees** - Pay trading fees in DEEP tokens
-- **Slippage protection** - Built-in via `min_base_out` parameter
-- **Multiple pools** - SUI/USDC, DEEP/SUI, DEEP/USDC
+// Load constraint profile from ENS
+await loadENSConstraintProfile("conservative.agentvault.eth")
+// → { dailyLimit: 50, perTxLimit: 10, ... }
 
-### Available Testnet Pools
-
-| Pair | Pool ID |
-|------|---------|
-| DEEP/SUI | `0x0064034cf7f797e298bd9cd506f0e127ce511a798b3d9113e2f0cdb7e2c049f6` |
-| SUI/USDC | `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407` |
-| DEEP/USDC | `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce` |
-
-## Intent Parsing
-
-Convert natural language to contract parameters:
-
-**Input:**
-> "Trade up to $50 per day, max $10 per transaction, alert me at $40, keep $5 minimum"
-
-**Output:**
-```json
-{
-  "dailyLimit": 50000000,
-  "perTxLimit": 10000000,
-  "alertThreshold": 40000000,
-  "minBalance": 5000000,
-  "confidence": 0.85
-}
+// Full resolution with avatar
+await resolveENSOrAddress("alice.eth")
+// → { address: "0x...", ensName: "alice.eth", avatar: "https://..." }
 ```
+
+---
+
+## Constraint Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         CONSTRAINT VALIDATION FLOW                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  Agent calls execute_swap(vault, pool, quantity=30, ...)                       │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  1. CHECK: sender == vault.agent?                                        │   │
+│  │     └── ❌ Abort: ENotAgent                                              │   │
+│  │     └── ✅ Continue                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  2. CHECK: vault.paused == false?                                        │   │
+│  │     └── ❌ Abort: EVaultPaused                                           │   │
+│  │     └── ✅ Continue                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  3. CHECK: quantity <= per_tx_limit (25)?                                │   │
+│  │     └── 30 > 25 ❌ Abort: EExceedsPerTxLimit                             │   │
+│  │     └── ✅ Continue                                                       │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  4. CHECK: spent_today + quantity <= daily_limit (100)?                  │   │
+│  │     └── 45 + 30 = 75 ≤ 100 ✅ Continue                                   │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  5. CHECK: balance - quantity >= min_balance (10)?                       │   │
+│  │     └── 500 - 30 = 470 ≥ 10 ✅ Continue                                  │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  6. CHECK: spent_today + quantity >= alert_threshold (80)?               │   │
+│  │     └── 75 < 80 → No alert                                               │   │
+│  │     └── If ≥ 80 → Emit AlertTriggered event                              │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                           │                                                     │
+│                           ▼                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  7. EXECUTE: DeepBook swap                                               │   │
+│  │     └── Update spent_today = 75                                          │   │
+│  │     └── Emit SwapExecuted event                                          │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## Events
 
-The contract emits events for all significant actions:
+| Event | Description |
+|-------|-------------|
+| `VaultCreated` | New vault deployed |
+| `PaymentExecuted` | Agent made a payment |
+| `SwapExecuted` | Agent executed a swap |
+| `AlertTriggered` | Spending exceeded alert threshold |
+| `ConstraintsUpdated` | Owner changed limits |
+| `VaultPaused` | Owner paused/unpaused vault |
+| `FundsDeposited` | Owner added funds |
+| `FundsWithdrawn` | Owner removed funds |
 
-- `VaultCreated` - New vault deployed
-- `PaymentExecuted` - Agent made a payment
-- `SwapExecuted` - Agent executed a swap
-- `AlertTriggered` - Spending exceeded alert threshold
-- `ConstraintsUpdated` - Owner changed limits
-- `VaultPaused` - Owner paused/unpaused vault
-- `FundsDeposited` - Owner added funds
-- `FundsWithdrawn` - Owner removed funds
-
-## Security Model
-
-1. **On-chain enforcement** - Constraints checked by Move VM, not backend
-2. **Shared objects** - Agents can transact without owner signature
-3. **Daily reset** - Spending limits reset every 24 hours automatically
-4. **Emergency pause** - Owner can halt all activity instantly
-5. **No key sharing** - Agent uses its own keypair, never has owner's keys
+---
 
 ## Deployed Contracts
 
 | Network | Package ID |
 |---------|------------|
-| Testnet | `0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434` |
+| Sui Testnet | `0x9eb66e8ef73279472ec71d9ff8e07e97e4cb3bca5b526091019c133e24a3b434` |
 
-## Demo Agent
+### DeepBook v3 Testnet Pools
 
-Run the demo agent script to see autonomous trading in action:
+| Pair | Pool ID |
+|------|---------|
+| DEEP/SUI | `0x0064034cf7f797e298bd9cd506f0e127ce511a798b3d9113e2f0cdb7e2c049f6` |
+| SUI/DBUSDC | `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407` |
+| DEEP/DBUSDC | `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce` |
 
-```bash
-cd scripts
-npm install
-npm run agent-demo
-```
+---
 
-See [scripts/demo-agent.ts](scripts/demo-agent.ts) for implementation details.
+## Security Model
+
+| Feature | Implementation |
+|---------|---------------|
+| **On-chain enforcement** | Constraints checked by Move VM, not backend |
+| **Shared objects** | Agents can transact without owner signature |
+| **Daily reset** | Spending limits reset every 24 hours automatically |
+| **Emergency pause** | Owner can halt all activity instantly |
+| **No key sharing** | Agent uses its own keypair |
+| **ENS verification** | Resolved addresses shown with verification badge |
+
+---
 
 ## Future Roadmap
 
+- [ ] Real ENS subdomain deployment for profiles
 - [ ] Yield routing integration (Scallop, Navi)
 - [ ] Multi-agent vaults
 - [ ] Time-based constraints
 - [ ] Whitelist/blacklist for recipients
 - [ ] Mainnet deployment
 
+---
+
+## Demo
+
+```bash
+# Run the demo agent
+cd scripts
+npm install
+npm run agent-demo
+```
+
+---
+
 ## Built For
 
-**ETHGlobal HackMoney 2026** - Sui Track
+<p align="center">
+  <strong>ETHGlobal HackMoney 2026</strong>
+</p>
+
+<p align="center">
+  <img src="https://assets.coingecko.com/coins/images/26375/standard/sui_asset.jpeg" width="40" alt="Sui" />
+  <span>&nbsp;&nbsp;Sui Track&nbsp;&nbsp;</span>
+  <img src="https://avatars.githubusercontent.com/u/47940724?s=200&v=4" width="40" alt="ENS" />
+  <span>&nbsp;&nbsp;ENS Track</span>
+</p>
+
+---
 
 ## License
 
@@ -355,4 +622,6 @@ MIT
 
 ---
 
-Built with Move on Sui
+<p align="center">
+  Built with ❤️ on <strong>Move</strong> and <strong>Sui</strong>
+</p>
